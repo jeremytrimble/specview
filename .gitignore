@@ -1,0 +1,50 @@
+# Hidden Files
+.*
+
+# Compilation Outputs
+*.o
+*.a
+*.so
+*.so.*.*.*
+
+# Archive Files
+*.tar
+*.gz
+*.tgz
+*.bz2
+*.lzma
+*.xz
+*.lz4
+*.lzo
+
+# Compiled Python Files
+*.pyc
+
+# Mercurial Backups
+*.patch
+*.orig
+*.rej
+
+# Swap/autosave files
+*.sw[klmnop]
+*~
+
+# Log
+*.log
+
+# .nfs files are created when an open file is removed but is still being accessed
+.nfs*
+
+# ctags files
+tags
+
+# Build (CMake) Directories
+build*
+
+# local vimrc files
+vimrc
+
+*.egg-info
+
+!.gitignore
+
