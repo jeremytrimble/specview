@@ -45,8 +45,7 @@ def main():
 
     sample_rate_Hz = cap.get(sigmf.SigMFFile.SAMPLE_RATE_KEY) or smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
 
-
-    NFFT = 1024
+    NFFT = 512 
     win = scipy.signal.windows.hamming(NFFT)
     f = scipy.signal.ShortTimeFFT(
         win=win,
@@ -61,8 +60,8 @@ def main():
 
     t = np.arange( len(data) )
 
-    #t = t[:50000]
-    #data = data[:50000]
+    #t = t[:500000]
+    #data = data[:500000]
 
     print(f"{sample_rate_Hz=}")
     print(f"{f.extent(len(data))=}")
@@ -70,11 +69,41 @@ def main():
 
     #wid = pg.PlotWidget()
 
-    pw = pg.plot(t, data.real, pen='r')
-    pw.plot(t, data.imag, pen='g')
+    if 0:
+        pw = pg.plot(t, data.real, pen='r')
+        pw.plot(t, data.imag, pen='g')
 
-    pw.setYRange(-1.1, +1.1)
-    pw.setXRange(0, 1000)
+        pw.setYRange(-1.1, +1.1)
+        pw.setXRange(0, 1000)
+    elif 1:
+        print("In here")
+        S = f.stft( data )
+        pi = pg.image( 20*np.log10(np.abs(np.abs(S))) )
+        #pi.setYRange(0, 5)
+
+    elif 0:
+        
+        tmin,tmax,fmin,fmax = f.extent(len(data))
+
+        S = f.stft(data)
+
+        app = pg.mkQApp("Derp")
+
+        w = pg.GraphicsView()
+        w.show()
+
+        view = pg.ViewBox()
+        w.setCentralItem(view)
+
+        pi = pg.ImageItem( 20*np.log10(np.abs(np.abs(S))) )
+        view.addItem(pi)
+
+        #view.setXRange(fmin,fmax)
+        #view.setYRange(tmin, tmin+5.0)
+
+
+
+
 
     pg.exec()
 
