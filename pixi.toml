@@ -16,3 +16,5 @@ sigmf = ">=1.2.10, <2"
 numpy = "*"
 scipy = ">=1.16.0, <2"
 specview = {path=".", editable=true}
+diskcache = ">=5.6.3, <6"
+platformdirs = ">=4.3.8, <5"

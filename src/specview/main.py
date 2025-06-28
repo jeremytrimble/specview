@@ -1,21 +1,63 @@
-
-from collections import deque
+from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer
+from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
+import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
-import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtGui
+import signal # TODO: let control-C actually close the app
+
+import typing
+import scipy.signal, scipy.signal.windows
+
 import sigmf
-
-import scipy.signal
-import scipy.signal.windows
-
 import logging
 
 from pathlib import Path
 import argparse
+from  dataclasses import dataclass
 
+from platformdirs import user_cache_dir
+import diskcache
+import enum
+
+from contextlib import contextmanager
+import time
+import datetime
+
+dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
 log = logging.getLogger("specview")
 
+@contextmanager
+def measure_runtime(action:str|None, log_level:int|str=logging.INFO):
+    tick = time.monotonic()
+    yield
+    tock = time.monotonic()
+
+    if action is None:
+        action = "something"
+
+    delta = datetime.timedelta(seconds=tock-tick)
+    log.log(log_level, f"{action} took {delta}")
+
+
+class ComputedDataType(str, enum.Enum):
+    TIME_SERIES = "time-series" # dimensions are [channel, time]
+    SPECTROGRAM = "spectrogram" # dimensios are [channel, time, freq]
+
+@dataclass
+class TimeSeries:
+    time_sec: np.ndarray[float]    # timestamps, same length as first dimension of data
+    channels: list[str] # list of channels in this capture
+    data: np.ndarray # [channel, time]
+    cdtype: ComputedDataType = ComputedDataType.TIME_SERIES
+
+@dataclass
+class Spectrogram:
+    channels: list[str] # list of channels in this capture
+    time_sec: np.ndarray[float]    # timestamps, same length as first dimension of data
+    freq_Hz: np.ndarray[float]     # frequency, relative to center bin
+    center_freq_Hz: float|None  # tuner center frequency if applicable, or None
+    data: np.ndarray # [channel, time, freq]
+    cdtype: ComputedDataType = ComputedDataType.SPECTROGRAM
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
@@ -23,96 +65,161 @@ def parse_args():
 
     return parser.parse_args()
 
+UNDEF = object()
+def smf_get_field_cap_or_global(smf: sigmf.SigMFFile, capture_idx:int|None, field:str, default:typing.Any|typing.Literal[UNDEF]=UNDEF) -> typing.Any:
+    if capture_idx is not None:
+        cap = smf.get_captures()[capture_idx]
+        if field in cap:
+            return cap[field]
+    val = smf.get_global_field(field, default=default)
+    if val is UNDEF:
+        raise KeyError(f"can't find value for field {field} in capture {capture_idx} or globals")
+    else:
+        return val
 
-def load_file(path:Path):
-    smf = sigmf.sigmffile.fromfile(path)
-    return smf
 
+@dcache.memoize()
+# note: Path not hashable repeatably
+def load_capture(path:str, cap_idx:int):
+    with measure_runtime("entirety of load_capture"):
+        path = Path(path)
+        smf = sigmf.sigmffile.fromfile(path)
+
+        #sample_rate_Hz = cap.get(sigmf.SigMFFile.SAMPLE_RATE_KEY) or smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        sample_rate_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        center_freq_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.FREQUENCY_KEY, None)
+
+        # TODO: capture as SpectrogramConfig pa.rameter
+        NFFT = 512 
+        win = scipy.signal.windows.hamming(NFFT)
+        f = scipy.signal.ShortTimeFFT(
+            win=win,
+            hop=len(win)-len(win)//4,
+            fs=sample_rate_Hz,
+            fft_mode="centered",
+        )
+
+        with measure_runtime("timeseries loading"):
+            timedomain_data = smf.read_samples_in_capture(0)
+            #timedomain_data = timedomain_data[:1000000]    # TODO:remove!
+        t = np.arange( len(timedomain_data) )/sample_rate_Hz
+
+        with measure_runtime("FFT"):
+            S = f.stft(timedomain_data)
+        Smag_dB = 20*np.log10(np.abs(S))
+
+        tdat = TimeSeries(
+            time_sec=t,
+            channels=["ch0"], #TODO
+            data=timedomain_data.reshape([1,len(timedomain_data)]),
+        )
+
+        spec_freq_Hz = f.f
+        spec_time_sec = f.t(len(timedomain_data))
+
+        spec = Spectrogram(
+            channels=["ch0"],    #TODO
+            time_sec = spec_time_sec,
+            freq_Hz=spec_freq_Hz,
+            center_freq_Hz=center_freq_Hz,
+            data = Smag_dB.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
+        )
+
+        return tdat, spec
+
+
+
+
+
+# Subclass QMainWindow to customize your application's main window
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("The PySDR Spectrum Analyzer")
+        self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
+
+        layout = QGridLayout() # overall layout
+
+        # Time plot
+        time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'})
+        time_plot.setMouseEnabled(x=False, y=True)
+        time_plot.setYRange(-1.1, 1.1)
+        time_plot_curve_i = time_plot.plot([]) 
+        time_plot_curve_q = time_plot.plot([]) 
+        layout.addWidget(time_plot, 1, 0)
+
+        # Freq plot
+        freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'})
+        freq_plot.setMouseEnabled(x=False, y=True)
+        freq_plot_curve = freq_plot.plot([]) 
+        #freq_plot.setXRange(center_freq/1e6 - sample_rate/2e6, center_freq/1e6 + sample_rate/2e6)
+        #freq_plot.setYRange(-30, 20)
+        layout.addWidget(freq_plot, 2, 0)
+
+        # Layout container for waterfall related stuff
+        waterfall_layout = QHBoxLayout()
+        layout.addLayout(waterfall_layout, 3, 0)
+
+        # Waterfall plot
+        waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [MHz]'})
+        imageitem = pg.ImageItem(axisOrder='col-major') # this arg is purely for performance
+        waterfall.addItem(imageitem)
+        waterfall.setMouseEnabled(x=False, y=False)
+        waterfall_layout.addWidget(waterfall)
+
+        # Colorbar for waterfall
+        colorbar = pg.HistogramLUTWidget()
+        colorbar.setImageItem(imageitem) # connects the bar to the waterfall imageitem
+        colorbar.item.gradient.loadPreset('viridis') # set the color map, also sets the imageitem
+        imageitem.setLevels((-30, 20)) # needs to come after colorbar is created for some reason
+        waterfall_layout.addWidget(colorbar)
+
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        self.time_plot_curve_i = time_plot_curve_i
+        self.time_plot_curve_q = time_plot_curve_q
+        self.imageitem = imageitem
+
+def parse_args():
+    parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
+    parser.add_argument("-C", "--clear-cache", default=False, action="store_true", help="Clear cache", dest="clear_cache")
+    parser.add_argument("file", default=None, type=Path, help="Path to a SigMF file to open.")
+
+
+    return parser.parse_args()
 
 def main():
+
     logging.basicConfig(level=logging.INFO)
+
     args = parse_args()
 
-    #win = pg.GraphicsView()
-    #win.resize(1000, 600)
-    #win.setWindowTitle('specview')
+    if args.clear_cache:
+        dcache.clear()
+    dcache.reset('size_limit', 10 *2**30)
+    dcache.cull()
 
 
-    smf = load_file(args.file)
+    log.info(f"cache size before: {dcache.volume()}")
+    with measure_runtime(f"loading {args.file}"):
+        tser, sgram = load_capture(str(args.file), 0)
+    log.info(f"cache size after: {dcache.volume()}")
 
-    captures = smf.get_captures()
-    cap = captures[0]
+    app = QApplication([])
+    window = MainWindow()
+    window.show() # Windows are hidden by default
+    signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 
-    sample_rate_Hz = cap.get(sigmf.SigMFFile.SAMPLE_RATE_KEY) or smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+    LIMIT = 4096
 
-    NFFT = 512 
-    win = scipy.signal.windows.hamming(NFFT)
-    f = scipy.signal.ShortTimeFFT(
-        win=win,
-        hop=len(win)-len(win)//4,
-        fs=sample_rate_Hz,
-        fft_mode="centered",
-    )
+    window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
+    window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
+    window.imageitem.setImage(sgram.data[0,:LIMIT,:])
 
-    data = smf.read_samples_in_capture(0)
-    
-    print(f"{data.shape=}")
-
-    t = np.arange( len(data) )
-
-    #t = t[:500000]
-    #data = data[:500000]
-
-    print(f"{sample_rate_Hz=}")
-    print(f"{f.extent(len(data))=}")
-    print(f"{f.p_num(len(t))=}")
-
-    #wid = pg.PlotWidget()
-
-    if 0:
-        pw = pg.plot(t, data.real, pen='r')
-        pw.plot(t, data.imag, pen='g')
-
-        pw.setYRange(-1.1, +1.1)
-        pw.setXRange(0, 1000)
-    elif 1:
-        print("In here")
-        S = f.stft( data )
-        pi = pg.image( 20*np.log10(np.abs(np.abs(S))) )
-        #pi.setYRange(0, 5)
-
-    elif 0:
-        
-        tmin,tmax,fmin,fmax = f.extent(len(data))
-
-        S = f.stft(data)
-
-        app = pg.mkQApp("Derp")
-
-        w = pg.GraphicsView()
-        w.show()
-
-        view = pg.ViewBox()
-        w.setCentralItem(view)
-
-        pi = pg.ImageItem( 20*np.log10(np.abs(np.abs(S))) )
-        view.addItem(pi)
-
-        #view.setXRange(fmin,fmax)
-        #view.setYRange(tmin, tmin+5.0)
-
-
-
-
-
-    pg.exec()
-
+    app.exec() # Start the event loop
 
 if __name__ == "__main__":
     main()
-
-    #import sys
-
-    #if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-    #    QtGui.QApplication.instance().exec_()
-
