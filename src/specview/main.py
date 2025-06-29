@@ -137,7 +137,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("The PySDR Spectrum Analyzer")
-        self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
+        #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
 
@@ -175,9 +175,18 @@ class MainWindow(QMainWindow):
         imageitem.setLevels((-30, 20)) # needs to come after colorbar is created for some reason
         waterfall_layout.addWidget(colorbar)
 
+        roiPen = pg.mkPen("red", width=3)
+        roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
+        roi.setPen(roiPen)
+        roi.sigRegionChanged.connect(lambda x:print(f"Region changed: {x.getArraySlice(returnSlice=False)}"))
+
+        waterfall.addItem(roi)
+
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+
+        self.resize(QSize(2000,1500))
 
         self.time_plot_curve_i = time_plot_curve_i
         self.time_plot_curve_q = time_plot_curve_q
