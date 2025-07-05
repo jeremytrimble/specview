@@ -5,6 +5,8 @@ import pyqtgraph as pg
 from .spec_types import Spectrogram
 from .app_state import AppState
 
+from .util import signals_blocked
+
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -27,9 +29,20 @@ class SpecanView(QWidget):
 
         self.setLayout(layout)
 
+        self._connect_app_signals()
+
     def _get_app_state(self) -> AppState:
-        # TODO: how best to fetch appstatte?
         return QApplication.instance().app_state
+
+    def _connect_app_signals(self):
+        app_state = self._get_app_state()
+        app_state.selected_frequencies_changed.connect(self._on_frequencies_changed)
+
+    def _on_frequencies_changed(self, freq_lo_Hz: float, freq_hi_Hz: float):
+        # TODO: handle ranges later
+        if freq_hi_Hz != freq_lo_Hz:
+            print("specanview: freq intervals not supported yet")
+        self._freq_crosshair_x.setPos(freq_lo_Hz)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
         #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
@@ -42,7 +55,8 @@ class SpecanView(QWidget):
             #print(f"Mouse position: x={mousePoint.x()}, y={mousePoint.y()}")
 
             # TODO: handle frequency interval selection later:
-            self._get_app_state().set_selected_frequencies(freq_Hz,freq_Hz)
+            with signals_blocked(self):
+                self._get_app_state().set_selected_frequencies(freq_Hz,freq_Hz)
 
     def _redisplay(self):
 
@@ -61,14 +75,17 @@ class SpecanView(QWidget):
 
         self._freq_plot_curve.setData(
             x = f_Hz,
-            y = self._sgram.data[chan,time_idx,:]
+            y = trace,
         )
+        #self._freq_plot.setAspectLocked(False)
+
         self._freq_plot.setXRange( f_lo_Hz, f_hi_Hz )
 
         trace_lo = round(trace.min(), -1)
         trace_hi = round(trace.max(), -1)
         self._freq_plot.setYRange( trace_lo, trace_hi )
 
+        #self._freq_plot.setAspectLocked(True)
 
     def setDisplayedSpectrogramData(self, sgram:Spectrogram):
         self._sgram = sgram

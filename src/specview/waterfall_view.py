@@ -5,6 +5,8 @@ import pyqtgraph as pg
 from .spec_types import Spectrogram
 from .app_state import AppState
 
+from .util import signals_blocked
+
 class WaterfallView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,6 +31,10 @@ class WaterfallView(QWidget):
         self._imageitem.setLevels((-30, 20)) # needs to come after colorbar is created for some reason
         waterfall_layout.addWidget(self._colorbar)
 
+        # Freq crosshair
+        self._freq_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
+        self._waterfall.addItem(self._freq_crosshair_x, ignoreBounds=True)
+
         self._roiPen = pg.mkPen("red", width=3)
         roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
         roi.setPen(self._roiPen)
@@ -36,7 +42,24 @@ class WaterfallView(QWidget):
 
         self._waterfall.addItem(roi)
 
+        self._waterfall.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
+
         self.setLayout(waterfall_layout)
+
+        self._connect_app_signals()
+
+    def _get_app_state(self) -> AppState:
+        return QApplication.instance().app_state
+
+    def _connect_app_signals(self):
+        app_state = self._get_app_state()
+        app_state.selected_frequencies_changed.connect(self._on_frequencies_changed)
+
+    def _on_frequencies_changed(self, freq_lo_Hz: float, freq_hi_Hz: float):
+        # TODO: handle ranges later
+        if freq_hi_Hz != freq_lo_Hz:
+            print("waterfall_view: freq intervals not supported yet")
+        self._freq_crosshair_x.setPos(freq_lo_Hz)
 
     def _redisplay(self):
 
@@ -72,6 +95,23 @@ class WaterfallView(QWidget):
         self._waterfall.setYRange( time_lo_sec, time_hi_sec )
         self._waterfall.setXRange( f_lo_Hz, f_hi_Hz )
 
+    def _on_scene_mouse_moved(self, pos: QPointF):
+        #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
+        if self._waterfall.sceneBoundingRect().contains(pos):
+            mousePoint = self._waterfall.getViewBox().mapSceneToView(pos)
+            freq_Hz = mousePoint.x()
+            magnitude_dB = mousePoint.y()
+            self._freq_crosshair_x.setPos( freq_Hz )
+            #self.crosshair_y.setPos(mousePoint.y())
+            #print(f"Mouse position: x={mousePoint.x()}, y={mousePoint.y()}")
+
+            # TODO: handle frequency interval selection later:
+            with signals_blocked(self):
+                self._get_app_state().set_selected_frequencies(freq_Hz,freq_Hz)
+
+
     def setDisplayedSpectrogramData(self, sgram:Spectrogram):
         self._sgram = sgram
         self._redisplay()
+
+    
