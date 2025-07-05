@@ -22,6 +22,7 @@ from specview.util import measure_runtime
 
 from .time_view import TimeView
 from .specan_view import SpecanView
+from .app_state import AppState
 
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
@@ -156,13 +157,14 @@ def main():
     dcache.reset('size_limit', 10 *2**30)
     dcache.cull()
 
-
     log.info(f"cache size before: {dcache.volume()}")
     with measure_runtime(f"loading {args.file}"):
         tser, sgram = load_capture(str(args.file), 0)
     log.info(f"cache size after: {dcache.volume()}")
 
     app = QApplication([])
+    app.app_state = AppState(parent=app)
+
     window = MainWindow()
     window.show() # Windows are hidden by default
     signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
@@ -177,6 +179,8 @@ def main():
     #window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
     #window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
     window.imageitem.setImage(sgram.data[0,:LIMIT,:])
+
+    app.app_state.selected_frequencies_changed.connect(lambda f1,f2: print(f1,f2))
 
 
     app.exec() # Start the event loop
