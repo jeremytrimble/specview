@@ -63,6 +63,7 @@ def load_capture(path:str, cap_idx:int):
 
         with measure_runtime("FFT"):
             S = f.stft(timedomain_data)
+            S = S.T # transpose so that now S.shape = [num_times x num_bins]
         Smag_dB = 20*np.log10(np.abs(S))
 
         tdat = TimeSeries(
@@ -73,6 +74,10 @@ def load_capture(path:str, cap_idx:int):
 
         spec_freq_Hz = f.f
         spec_time_sec = f.t(len(timedomain_data))
+
+        #print(f"{Smag_dB.shape=}")
+        #print(f"{len(spec_time_sec)=}, {len(spec_freq_Hz)=}")
+        assert Smag_dB.shape == (len(spec_time_sec), len(spec_freq_Hz))
 
         spec = Spectrogram(
             channels=["ch0"],    #TODO
@@ -101,7 +106,7 @@ class MainWindow(QMainWindow):
         self.specan_view = SpecanView(parent=self)
         self.waterfall_view = WaterfallView(parent=self)
 
-        layout.addWidget(self.time_view, 1, 0)
+        #layout.addWidget(self.time_view, 1, 0)
         layout.addWidget(self.specan_view, 2, 0)
         layout.addWidget(self.waterfall_view, 3, 0)
 
@@ -143,10 +148,10 @@ def main():
     window.show() # Windows are hidden by default
     signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 
-    LIMIT = 4096
-    tser: TimeSeries
-    tser.data = tser.data[:,:LIMIT]
-    tser.time_sec = tser.time_sec[:LIMIT]
+    #LIMIT = 4096
+    #tser: TimeSeries
+    #tser.data = tser.data[:,:LIMIT]
+    #tser.time_sec = tser.time_sec[:LIMIT]
 
     sgram: Spectrogram
 
@@ -154,12 +159,7 @@ def main():
     window.specan_view.setDisplayedSpectrogramData(sgram)
     window.waterfall_view.setDisplayedSpectrogramData(sgram)
 
-
-    #window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
-    #window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
-    #window.imageitem.setImage(sgram.data[0,:LIMIT,:])
-
-    app.app_state.selected_frequencies_changed.connect(lambda f1,f2: print(f1,f2))
+    #app.app_state.selected_frequencies_changed.connect(lambda f1,f2: print(f1,f2))
 
 
     app.exec() # Start the event loop

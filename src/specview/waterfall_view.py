@@ -19,7 +19,7 @@ class WaterfallView(QWidget):
         # Waterfall plot
         self._waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [MHz]'})
         self._waterfall.plotItem.getViewBox().invertY(True)
-        self._imageitem = pg.ImageItem(axisOrder='col-major') # this arg is purely for performance
+        self._imageitem = pg.ImageItem(axisOrder='row-major')
         self._waterfall.addItem(self._imageitem)
         self._waterfall.setMouseEnabled(x=True, y=True)
         waterfall_layout.addWidget(self._waterfall)
