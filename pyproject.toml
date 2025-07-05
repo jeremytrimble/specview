@@ -4,4 +4,22 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "diskcache>=5.6.3",
+    "numpy>=2.3.1",
+    "platformdirs>=4.3.8",
+    "pydantic>=2.11.7",
+    "pyqt5>=5.15.11",
+    "pyqtgraph>=0.13.7",
+    "pytest>=8.4.1",
+    "scipy>=1.16.0",
+    "sigmf>=1.2.10",
+]
+
+[dependency-groups]
+dev = [
+    "specview",
+]
+
+[tool.uv.sources]
+specview = { workspace = true }

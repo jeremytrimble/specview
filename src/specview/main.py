@@ -4,7 +4,6 @@ import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 import signal # TODO: let control-C actually close the app
 
-import typing
 import scipy.signal, scipy.signal.windows
 
 import sigmf
@@ -12,71 +11,24 @@ import logging
 
 from pathlib import Path
 import argparse
-from  dataclasses import dataclass
 
 from platformdirs import user_cache_dir
 import diskcache
-import enum
 
-from contextlib import contextmanager
-import time
-import datetime
+
+from specview.smf import smf_get_field_cap_or_global
+from specview.spec_types import Spectrogram, TimeSeries
+from specview.util import measure_runtime
 
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
 log = logging.getLogger("specview")
-
-@contextmanager
-def measure_runtime(action:str|None, log_level:int|str=logging.INFO):
-    tick = time.monotonic()
-    yield
-    tock = time.monotonic()
-
-    if action is None:
-        action = "something"
-
-    delta = datetime.timedelta(seconds=tock-tick)
-    log.log(log_level, f"{action} took {delta}")
-
-
-class ComputedDataType(str, enum.Enum):
-    TIME_SERIES = "time-series" # dimensions are [channel, time]
-    SPECTROGRAM = "spectrogram" # dimensios are [channel, time, freq]
-
-@dataclass
-class TimeSeries:
-    time_sec: np.ndarray[float]    # timestamps, same length as first dimension of data
-    channels: list[str] # list of channels in this capture
-    data: np.ndarray # [channel, time]
-    cdtype: ComputedDataType = ComputedDataType.TIME_SERIES
-
-@dataclass
-class Spectrogram:
-    channels: list[str] # list of channels in this capture
-    time_sec: np.ndarray[float]    # timestamps, same length as first dimension of data
-    freq_Hz: np.ndarray[float]     # frequency, relative to center bin
-    center_freq_Hz: float|None  # tuner center frequency if applicable, or None
-    data: np.ndarray # [channel, time, freq]
-    cdtype: ComputedDataType = ComputedDataType.SPECTROGRAM
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
     parser.add_argument("file", default=None, type=Path, help="Path to a SigMF file to open.")
 
     return parser.parse_args()
-
-UNDEF = object()
-def smf_get_field_cap_or_global(smf: sigmf.SigMFFile, capture_idx:int|None, field:str, default:typing.Any|typing.Literal[UNDEF]=UNDEF) -> typing.Any:
-    if capture_idx is not None:
-        cap = smf.get_captures()[capture_idx]
-        if field in cap:
-            return cap[field]
-    val = smf.get_global_field(field, default=default)
-    if val is UNDEF:
-        raise KeyError(f"can't find value for field {field} in capture {capture_idx} or globals")
-    else:
-        return val
-
 
 @dcache.memoize()
 # note: Path not hashable repeatably
