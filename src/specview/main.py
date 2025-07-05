@@ -21,6 +21,7 @@ from specview.spec_types import Spectrogram, TimeSeries
 from specview.util import measure_runtime
 
 from .time_view import TimeView
+from .specan_view import SpecanView
 
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
@@ -84,7 +85,6 @@ def load_capture(path:str, cap_idx:int):
 
 
 
-
 # Subclass QMainWindow to customize your application's main window
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -96,17 +96,13 @@ class MainWindow(QMainWindow):
         layout = QGridLayout() # overall layout
 
         self.time_view = TimeView(parent=self)
+        self.specan_view = SpecanView(parent=self)
 
         # Time plot
         layout.addWidget(self.time_view, 1, 0)
 
         # Freq plot
-        freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'})
-        freq_plot.setMouseEnabled(x=False, y=True)
-        freq_plot_curve = freq_plot.plot([]) 
-        #freq_plot.setXRange(center_freq/1e6 - sample_rate/2e6, center_freq/1e6 + sample_rate/2e6)
-        #freq_plot.setYRange(-30, 20)
-        layout.addWidget(freq_plot, 2, 0)
+        layout.addWidget(self.specan_view, 2, 0)
 
         # Layout container for waterfall related stuff
         waterfall_layout = QHBoxLayout()
@@ -176,9 +172,12 @@ def main():
 
     window.time_view.setDisplayedTimeSeries(tser)
 
+    window.specan_view.setDisplayedSpectrogramData(sgram)
+
     #window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
     #window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
     window.imageitem.setImage(sgram.data[0,:LIMIT,:])
+
 
     app.exec() # Start the event loop
 
