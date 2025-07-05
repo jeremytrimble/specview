@@ -22,6 +22,7 @@ from specview.util import measure_runtime
 
 from .time_view import TimeView
 from .specan_view import SpecanView
+from .waterfall_view import WaterfallView
 from .app_state import AppState
 
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
@@ -98,37 +99,11 @@ class MainWindow(QMainWindow):
 
         self.time_view = TimeView(parent=self)
         self.specan_view = SpecanView(parent=self)
+        self.waterfall_view = WaterfallView(parent=self)
 
-        # Time plot
         layout.addWidget(self.time_view, 1, 0)
-
-        # Freq plot
         layout.addWidget(self.specan_view, 2, 0)
-
-        # Layout container for waterfall related stuff
-        waterfall_layout = QHBoxLayout()
-        layout.addLayout(waterfall_layout, 3, 0)
-
-        # Waterfall plot
-        waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [MHz]'})
-        imageitem = pg.ImageItem(axisOrder='col-major') # this arg is purely for performance
-        waterfall.addItem(imageitem)
-        waterfall.setMouseEnabled(x=False, y=False)
-        waterfall_layout.addWidget(waterfall)
-
-        # Colorbar for waterfall
-        colorbar = pg.HistogramLUTWidget()
-        colorbar.setImageItem(imageitem) # connects the bar to the waterfall imageitem
-        colorbar.item.gradient.loadPreset('viridis') # set the color map, also sets the imageitem
-        imageitem.setLevels((-30, 20)) # needs to come after colorbar is created for some reason
-        waterfall_layout.addWidget(colorbar)
-
-        roiPen = pg.mkPen("red", width=3)
-        roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
-        roi.setPen(roiPen)
-        roi.sigRegionChanged.connect(lambda x:print(f"Region changed: {x.getArraySlice(returnSlice=False)}"))
-
-        waterfall.addItem(roi)
+        layout.addWidget(self.waterfall_view, 3, 0)
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
@@ -136,7 +111,6 @@ class MainWindow(QMainWindow):
 
         self.resize(QSize(2000,1500))
 
-        self.imageitem = imageitem
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
@@ -170,15 +144,20 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 
     LIMIT = 4096
+    tser: TimeSeries
     tser.data = tser.data[:,:LIMIT]
+    tser.time_sec = tser.time_sec[:LIMIT]
+
+    sgram: Spectrogram
 
     window.time_view.setDisplayedTimeSeries(tser)
-
     window.specan_view.setDisplayedSpectrogramData(sgram)
+    window.waterfall_view.setDisplayedSpectrogramData(sgram)
+
 
     #window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
     #window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
-    window.imageitem.setImage(sgram.data[0,:LIMIT,:])
+    #window.imageitem.setImage(sgram.data[0,:LIMIT,:])
 
     app.app_state.selected_frequencies_changed.connect(lambda f1,f2: print(f1,f2))
 
