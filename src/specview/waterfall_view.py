@@ -35,6 +35,9 @@ class WaterfallView(QWidget):
         self._freq_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
         self._waterfall.addItem(self._freq_crosshair_x, ignoreBounds=True)
 
+        self._time_crosshair_y = pg.InfiniteLine(angle=0, movable=False)
+        self._waterfall.addItem(self._time_crosshair_y, ignoreBounds=True)
+
         self._roiPen = pg.mkPen("red", width=3)
         roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
         roi.setPen(self._roiPen)
@@ -97,14 +100,14 @@ class WaterfallView(QWidget):
         if self._waterfall.sceneBoundingRect().contains(pos):
             mousePoint = self._waterfall.getViewBox().mapSceneToView(pos)
             freq_Hz = mousePoint.x()
-            magnitude_dB = mousePoint.y()
+            time_sec = mousePoint.y()
             self._freq_crosshair_x.setPos( freq_Hz )
-            #self.crosshair_y.setPos(mousePoint.y())
-            #print(f"Mouse position: x={mousePoint.x()}, y={mousePoint.y()}")
+            self._time_crosshair_y.setPos( time_sec )
 
             # TODO: handle frequency interval selection later:
             with signals_blocked(self):
                 self._get_app_state().set_selected_frequencies(freq_Hz,freq_Hz)
+                self._get_app_state().set_selected_times(time_sec, time_sec)
 
 
     def setDisplayedSpectrogramData(self, sgram:Spectrogram):

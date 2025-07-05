@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSl
 import pyqtgraph as pg
 
 from .spec_types import TimeSeries
+from .app_state import AppState
 
 class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -13,10 +14,31 @@ class TimeView(QWidget):
         self._time_plot_curve_i = self._time_plot.plot([]) 
         self._time_plot_curve_q = self._time_plot.plot([]) 
 
+        self._time_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
+        self._time_plot.addItem(self._time_crosshair_x, ignoreBounds=True)
+
         layout = QHBoxLayout()
 
         layout.addWidget(self._time_plot)
         self.setLayout(layout)
+
+        self._connect_app_signals()
+
+    def _get_app_state(self) -> AppState:
+        return QApplication.instance().app_state
+
+    def _connect_app_signals(self):
+        app_state = self._get_app_state()
+
+        # TODO: NEXT: START_HERE: Uncommenting this line makes everything crazy-slow -- why?
+        #app_state.selected_times_changed.connect(self._on_times_changed)
+
+    def _on_times_changed(self, t_lo_sec:float, t_hi_sec:float):
+        # TODO: handle ranges later
+        if t_lo_sec != t_hi_sec:
+            print("time_view: time intervals not supported yet")
+        self._time_crosshair_x.setPos(t_lo_sec)
+
 
     def _redisplay(self):
 

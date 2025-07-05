@@ -7,6 +7,8 @@ from .app_state import AppState
 
 from .util import signals_blocked
 
+from bisect import bisect_left
+
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,6 +31,8 @@ class SpecanView(QWidget):
 
         self.setLayout(layout)
 
+        self._time_idx = 0
+
         self._connect_app_signals()
 
     def _get_app_state(self) -> AppState:
@@ -37,6 +41,22 @@ class SpecanView(QWidget):
     def _connect_app_signals(self):
         app_state = self._get_app_state()
         app_state.selected_frequencies_changed.connect(self._on_frequencies_changed)
+        app_state.selected_times_changed.connect(self._on_times_changed)
+
+    def _on_times_changed(self, t_lo_sec: float, t_hi_sec:float):
+        # TODO: handle ranges later
+        if t_lo_sec != t_hi_sec:
+            print("specanview: time intervals not supported yet")
+
+        if self._sgram is None:
+            return
+
+        # TODO: cache the bisect result
+        self._time_idx = bisect_left( self._sgram.time_sec, t_lo_sec )
+        self._redisplay()
+
+
+        
 
     def _on_frequencies_changed(self, freq_lo_Hz: float, freq_hi_Hz: float):
         # TODO: handle ranges later
@@ -65,7 +85,7 @@ class SpecanView(QWidget):
 
         # TODO pull channel, time segment, etc
         chan = 0
-        time_idx = 0
+        time_idx = self._time_idx
 
         f_Hz = self._sgram.freq_Hz
         f_lo_Hz = f_Hz[0]

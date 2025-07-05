@@ -57,8 +57,7 @@ def load_capture(path:str, cap_idx:int):
         )
 
         with measure_runtime("timeseries loading"):
-            timedomain_data = smf.read_samples_in_capture(0)
-            #timedomain_data = timedomain_data[:1000000]    # TODO:remove!
+            timedomain_data = smf.read_samples_in_capture(0)    # TODO: this seems to return a wrong/arbitrary number of samples in some cases
         t = np.arange( len(timedomain_data) )/sample_rate_Hz
 
         with measure_runtime("FFT"):
@@ -106,7 +105,7 @@ class MainWindow(QMainWindow):
         self.specan_view = SpecanView(parent=self)
         self.waterfall_view = WaterfallView(parent=self)
 
-        #layout.addWidget(self.time_view, 1, 0)
+        layout.addWidget(self.time_view, 1, 0)
         layout.addWidget(self.specan_view, 2, 0)
         layout.addWidget(self.waterfall_view, 3, 0)
 
