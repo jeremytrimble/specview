@@ -23,8 +23,7 @@ class SpecanView(QWidget):
         layout = QHBoxLayout()
         layout.addWidget(self._freq_plot)
 
-        self._freq_plot.enableMouse(True)      # causes plot axes to be rendered weirdly
-        self._freq_plot.sigSceneMouseMoved.connect(self._on_scene_mouse_moved)
+        self._freq_plot.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
 
         self.setLayout(layout)
 
