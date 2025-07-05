@@ -20,6 +20,8 @@ from specview.smf import smf_get_field_cap_or_global
 from specview.spec_types import Spectrogram, TimeSeries
 from specview.util import measure_runtime
 
+from .time_view import TimeView
+
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
 log = logging.getLogger("specview")
@@ -93,13 +95,10 @@ class MainWindow(QMainWindow):
 
         layout = QGridLayout() # overall layout
 
+        self.time_view = TimeView(parent=self)
+
         # Time plot
-        time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'})
-        time_plot.setMouseEnabled(x=False, y=True)
-        time_plot.setYRange(-1.1, 1.1)
-        time_plot_curve_i = time_plot.plot([]) 
-        time_plot_curve_q = time_plot.plot([]) 
-        layout.addWidget(time_plot, 1, 0)
+        layout.addWidget(self.time_view, 1, 0)
 
         # Freq plot
         freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'})
@@ -140,8 +139,6 @@ class MainWindow(QMainWindow):
 
         self.resize(QSize(2000,1500))
 
-        self.time_plot_curve_i = time_plot_curve_i
-        self.time_plot_curve_q = time_plot_curve_q
         self.imageitem = imageitem
 
 def parse_args():
@@ -175,9 +172,12 @@ def main():
     signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 
     LIMIT = 4096
+    tser.data = tser.data[:,:LIMIT]
 
-    window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
-    window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
+    window.time_view.setDisplayedTimeSeries(tser)
+
+    #window.time_plot_curve_i.setData(tser.data[0,:LIMIT].real)
+    #window.time_plot_curve_q.setData(tser.data[0,:LIMIT].imag)
     window.imageitem.setImage(sgram.data[0,:LIMIT,:])
 
     app.exec() # Start the event loop
