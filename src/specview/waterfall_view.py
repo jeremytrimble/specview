@@ -86,9 +86,6 @@ class WaterfallView(QWidget):
             time_hi_sec-time_lo_sec,
         )
 
-        print(f"{wf_rect=}")
-
-        #self._imageitem.setImage(wfall_data, rect=wf_rect)
         self._imageitem.setImage(wfall_data)
         self._imageitem.setRect(wf_rect)
 

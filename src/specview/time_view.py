@@ -8,7 +8,7 @@ class TimeView(QWidget):
         super().__init__(*args, **kwargs)
 
         self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'})
-        self._time_plot.setMouseEnabled(x=False, y=True)
+        self._time_plot.setMouseEnabled(x=True, y=True)
         self._time_plot.setYRange(-1.1, 1.1)
         self._time_plot_curve_i = self._time_plot.plot([]) 
         self._time_plot_curve_q = self._time_plot.plot([]) 
