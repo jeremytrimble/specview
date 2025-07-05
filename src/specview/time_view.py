@@ -31,13 +31,10 @@ class TimeView(QWidget):
         app_state = self._get_app_state()
 
         # TODO: NEXT: START_HERE: Uncommenting this line makes everything crazy-slow -- why?
-        #app_state.selected_times_changed.connect(self._on_times_changed)
+        #app_state.selected_times_changed.connect(self._on_time_cursor_changed)
 
-    def _on_times_changed(self, t_lo_sec:float, t_hi_sec:float):
-        # TODO: handle ranges later
-        if t_lo_sec != t_hi_sec:
-            print("time_view: time intervals not supported yet")
-        self._time_crosshair_x.setPos(t_lo_sec)
+    def _on_time_cursor_changed(self, t_sec:float):
+        self._time_crosshair_x.setPos(t_sec)
 
 
     def _redisplay(self):

@@ -40,29 +40,21 @@ class SpecanView(QWidget):
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()
-        app_state.selected_frequencies_changed.connect(self._on_frequencies_changed)
-        app_state.selected_times_changed.connect(self._on_times_changed)
+        app_state.cursor_frequency_changed.connect(self._on_freq_cursor_changed)
+        app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
 
-    def _on_times_changed(self, t_lo_sec: float, t_hi_sec:float):
+    def _on_time_cursor_changed(self, t_sec: float):
         # TODO: handle ranges later
-        if t_lo_sec != t_hi_sec:
-            print("specanview: time intervals not supported yet")
-
         if self._sgram is None:
             return
 
         # TODO: cache the bisect result
-        self._time_idx = bisect_left( self._sgram.time_sec, t_lo_sec )
+        self._time_idx = bisect_left( self._sgram.time_sec, t_sec )
         self._redisplay()
-
-
         
 
-    def _on_frequencies_changed(self, freq_lo_Hz: float, freq_hi_Hz: float):
-        # TODO: handle ranges later
-        if freq_hi_Hz != freq_lo_Hz:
-            print("specanview: freq intervals not supported yet")
-        self._freq_crosshair_x.setPos(freq_lo_Hz)
+    def _on_freq_cursor_changed(self, freq_Hz: float):
+        self._freq_crosshair_x.setPos(freq_Hz)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
         #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
@@ -76,7 +68,7 @@ class SpecanView(QWidget):
 
             # TODO: handle frequency interval selection later:
             with signals_blocked(self):
-                self._get_app_state().set_selected_frequencies(freq_Hz,freq_Hz)
+                self._get_app_state().set_cursor_frequency(freq_Hz)
 
     def _redisplay(self):
 

@@ -56,13 +56,10 @@ class WaterfallView(QWidget):
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()
-        app_state.selected_frequencies_changed.connect(self._on_frequencies_changed)
+        app_state.cursor_frequency_changed.connect(self._on_cursor_frequency_changed)
 
-    def _on_frequencies_changed(self, freq_lo_Hz: float, freq_hi_Hz: float):
-        # TODO: handle ranges later
-        if freq_hi_Hz != freq_lo_Hz:
-            print("waterfall_view: freq intervals not supported yet")
-        self._freq_crosshair_x.setPos(freq_lo_Hz)
+    def _on_cursor_frequency_changed(self, f_Hz: float):
+        self._freq_crosshair_x.setPos(f_Hz)
 
     def _redisplay(self):
 
@@ -106,8 +103,8 @@ class WaterfallView(QWidget):
 
             # TODO: handle frequency interval selection later:
             with signals_blocked(self):
-                self._get_app_state().set_selected_frequencies(freq_Hz,freq_Hz)
-                self._get_app_state().set_selected_times(time_sec, time_sec)
+                self._get_app_state().set_cursor_frequency(freq_Hz)
+                self._get_app_state().set_cursor_time(time_sec)
 
 
     def setDisplayedSpectrogramData(self, sgram:Spectrogram):
