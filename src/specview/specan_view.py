@@ -1,5 +1,11 @@
 from PyQt5.QtCore import QPointF
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel,
+    QHBoxLayout, QVBoxLayout, QPushButton, QComboBox , QGraphicsSceneMouseEvent,
+)
+
+
 import pyqtgraph as pg
 
 from .spec_types import Spectrogram
@@ -9,6 +15,73 @@ from .util import signals_blocked
 
 from bisect import bisect_left
 
+class MyViewBox(pg.ViewBox):
+    def __init__(self, parent=None, border=None, lockAspect=False, enableMouse=True, invertY=False, enableMenu=True, name=None, invertX=False, defaultPadding=0.02):
+        super().__init__(parent, border, lockAspect, enableMouse, invertY, enableMenu, name, invertX, defaultPadding)
+        self._sv = None
+        self._left_bound = None
+
+    def set_specanview(self, sv):
+        self._sv = sv
+
+    def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
+        pos :QPointF = event.scenePos()
+        if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            if self._sv._freq_plot.sceneBoundingRect().contains(pos):
+                mousePoint = self._sv._freq_plot.getViewBox().mapSceneToView(pos)
+
+                self._left_bound = mousePoint.x()
+
+                interval_roi : pg.LinearRegionItem = self._sv._interval_roi
+
+                interval_roi.setRegion( ( self._left_bound, self._left_bound+1.0 ) )
+                interval_roi.setVisible(True)   # TODO: emit signal
+                return event.accept()
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        #print(f"drag: {event=}")
+        if self._left_bound is not None:
+            pos :QPointF = event.scenePos()
+            if self._sv._freq_plot.sceneBoundingRect().contains(pos):
+                mousePoint = self._sv._freq_plot.getViewBox().mapSceneToView(pos)
+
+                interval_roi : pg.LinearRegionItem = self._sv._interval_roi
+                interval_roi.setRegion( ( self._left_bound, mousePoint.x() ) )
+            return event.accept()
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        #print(f"release: {event=}")
+
+        accepted = False
+
+        interval_roi : pg.LinearRegionItem = self._sv._interval_roi
+
+        if self._left_bound is not None:
+            pos :QPointF = event.scenePos()
+            if self._sv._freq_plot.sceneBoundingRect().contains(pos):
+                mousePoint = self._sv._freq_plot.getViewBox().mapSceneToView(pos)
+                interval_roi.setRegion( ( self._left_bound, mousePoint.x() ) )
+            else:
+                interval_roi.setVisible(False)   # TODO: emit signal
+            event.accept()
+            accepted = True
+
+        self._is_dragging = False
+        self._left_bound = None
+
+        if not accepted:
+            super().mouseReleaseEvent(event)
+
+    def mouseClickEvent(self, ev):
+        interval_roi : pg.LinearRegionItem = self._sv._interval_roi
+        interval_roi.setVisible(False)   # TODO: emit signal
+        return super().mouseClickEvent(ev)
+
+
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -16,7 +89,10 @@ class SpecanView(QWidget):
         self._sgram : Spectrogram|None = None
 
         # TODO: make MHz ticks display more nicely
-        self._freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'})
+        myvb = MyViewBox()
+        myvb.set_specanview(self)
+
+        self._freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'}, viewBox=myvb)
         self._freq_plot.setMouseEnabled(x=True, y=True)
         self._freq_plot_curve = self._freq_plot.plot([]) 
 
@@ -28,10 +104,14 @@ class SpecanView(QWidget):
         layout.addWidget(self._freq_plot)
 
         self._freq_plot.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
-
         self.setLayout(layout)
 
         self._time_idx = 0
+
+        roiPen = pg.mkPen( pg.mkColor("#6060FF"), width=3)
+        self._interval_roi = pg.LinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen)
+        self._interval_roi.setVisible(False)
+        self._freq_plot.addItem(self._interval_roi, ignoreBounds=True)
 
         self._connect_app_signals()
 

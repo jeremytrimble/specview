@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("The PySDR Spectrum Analyzer")
+        self.setWindowTitle("SpecView") # TODO: set title with filename(s)
         #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
@@ -120,7 +120,6 @@ def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
     parser.add_argument("-C", "--clear-cache", default=False, action="store_true", help="Clear cache", dest="clear_cache")
     parser.add_argument("file", default=None, type=Path, help="Path to a SigMF file to open.")
-
 
     return parser.parse_args()
 
