@@ -4,11 +4,17 @@ import pyqtgraph as pg
 from .spec_types import TimeSeries
 from .app_state import AppState
 
+from .interval_select_viewbox import IntervalSelectViewBox
+
+from .ui_constants import INTERVAL_ROI_COLOR
+
 class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'})
+        myvb = IntervalSelectViewBox()
+
+        self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'}, viewBox=myvb)
         self._time_plot.setMouseEnabled(x=True, y=True)
         self._time_plot.setYRange(-1.1, 1.1)
         self._time_plot_curve_i = self._time_plot.plot([]) 
@@ -21,6 +27,13 @@ class TimeView(QWidget):
 
         layout.addWidget(self._time_plot)
         self.setLayout(layout)
+
+        roiPen = pg.mkPen( pg.mkColor(INTERVAL_ROI_COLOR), width=3)
+        self._interval_roi = pg.LinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen)
+        self._interval_roi.setVisible(False)
+        self._time_plot.addItem(self._interval_roi, ignoreBounds=True)
+
+        myvb.set_plot_and_interval(self._time_plot, self._interval_roi)
 
         self._connect_app_signals()
 
