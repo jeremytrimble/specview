@@ -8,17 +8,12 @@ import typing
 #    SINGLE_FREQUENCY = 1
 #    FREQUENCY_INTERVAL = 2
 
-NoneType = type(None)
-
 
 class AppState(QObject):
     #_instance = None
 
     cursor_frequency_changed = pyqtSignal(float, name="cursor_frequency_changed")
     cursor_time_changed      = pyqtSignal(float, name="cursor_time_changed")
-
-    #frequency_interval_changed = pyqtSignal( [tuple], [NoneType], name="frequency_interval_changed") # tuple[float,float]|None
-    #time_interval_changed      = pyqtSignal( [tuple], [NoneType], name="time_interval_changed")
 
     frequency_interval_changed = pyqtSignal( [object], name="frequency_interval_changed") # tuple[float,float]|None
     time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")
@@ -45,18 +40,10 @@ class AppState(QObject):
 
     def set_time_interval(self, time_interval:tuple[float,float]|None ):
         self._time_interval = time_interval
-        #if self._time_interval is None:
-        #    self.time_interval_changed[NoneType].emit(self._time_interval)
-        #else:
-        #    self.time_interval_changed[tuple].emit(self._time_interval)
         self.time_interval_changed.emit(self._time_interval)
 
     def set_frequency_interval(self, frequency_interval:tuple[float,float]|None ):
         self._frequency_interval = frequency_interval
-        #if self._frequency_interval is None:
-        #    self.frequency_interval_changed[NoneType].emit(self._frequency_interval)
-        #else:
-        #    self.frequency_interval_changed[tuple].emit(self._frequency_interval)
         self.frequency_interval_changed.emit(self._frequency_interval)
 
 
@@ -67,12 +54,3 @@ class AppState(QObject):
     def set_cursor_time(self, t_sec:float):
         self._cursor_time = t_sec
         self.cursor_time_changed.emit( self._cursor_time )
-
-    #@classmethod
-    #def instance(cls):
-    #    if cls._instance is None:
-    #        cls._instance = AppState()
-    #    return cls._instance
-            
-
-
