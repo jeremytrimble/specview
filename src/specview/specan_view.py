@@ -48,7 +48,7 @@ class SpecanView(QWidget):
         self._freq_plot.addItem(self._interval_roi, ignoreBounds=True)
 
         myvb.set_plot_and_interval(self._freq_plot, self._interval_roi)
-        myvb.set_interval_change_callback( self._get_app_state().set_frequency_interval )
+        myvb.set_interval_change_callback( self._frequency_interval_set )
 
         self._connect_app_signals()
 
@@ -59,6 +59,11 @@ class SpecanView(QWidget):
         app_state = self._get_app_state()
         app_state.cursor_frequency_changed.connect(self._on_freq_cursor_changed)
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
+
+    def _frequency_interval_set(self, interval: tuple[float,float]|None):
+        with signals_blocked(self):
+            self._get_app_state().set_frequency_interval(interval)
+
 
     def _on_time_cursor_changed(self, t_sec: float):
         # TODO: handle ranges later

@@ -3,6 +3,8 @@ import datetime
 import logging
 import time
 from contextlib import contextmanager
+#import typing
+#from functools import partial
 
 from PyQt5.QtWidgets import QWidget
 
@@ -28,3 +30,7 @@ def signals_blocked(widget:QWidget):
         yield
     finally:
         widget.blockSignals(orig)
+
+#def invoke_with_signals_blocked(widget:QWidget, cb:typing.Callable, *args, **kwargs):
+#    with signals_blocked(widget):
+#        cb(*args, **kwargs)
