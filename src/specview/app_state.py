@@ -1,10 +1,14 @@
 from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 
+import typing
+
 #import enum
 #class FreqSelectionType(enum.IntEnum):
 #    SINGLE_FREQUENCY = 1
 #    FREQUENCY_INTERVAL = 2
+
+NoneType = type(None)
 
 
 class AppState(QObject):
@@ -12,6 +16,12 @@ class AppState(QObject):
 
     cursor_frequency_changed = pyqtSignal(float, name="cursor_frequency_changed")
     cursor_time_changed      = pyqtSignal(float, name="cursor_time_changed")
+
+    #frequency_interval_changed = pyqtSignal( [tuple], [NoneType], name="frequency_interval_changed") # tuple[float,float]|None
+    #time_interval_changed      = pyqtSignal( [tuple], [NoneType], name="time_interval_changed")
+
+    frequency_interval_changed = pyqtSignal( [object], name="frequency_interval_changed") # tuple[float,float]|None
+    time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")
 
     def __init__(self, parent = ...):
         super().__init__(parent)
@@ -29,6 +39,26 @@ class AppState(QObject):
 
         self._cursor_frequency: float = 0.0
         self._cursor_time: float = 0.0
+
+        self._time_interval: tuple[float,float]|None = None
+        self._frequency_interval: tuple[float,float]|None = None
+
+    def set_time_interval(self, time_interval:tuple[float,float]|None ):
+        self._time_interval = time_interval
+        #if self._time_interval is None:
+        #    self.time_interval_changed[NoneType].emit(self._time_interval)
+        #else:
+        #    self.time_interval_changed[tuple].emit(self._time_interval)
+        self.time_interval_changed.emit(self._time_interval)
+
+    def set_frequency_interval(self, frequency_interval:tuple[float,float]|None ):
+        self._frequency_interval = frequency_interval
+        #if self._frequency_interval is None:
+        #    self.frequency_interval_changed[NoneType].emit(self._frequency_interval)
+        #else:
+        #    self.frequency_interval_changed[tuple].emit(self._frequency_interval)
+        self.frequency_interval_changed.emit(self._frequency_interval)
+
 
     def set_cursor_frequency(self, f_Hz:float):
         self._cursor_frequency = f_Hz

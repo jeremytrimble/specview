@@ -34,6 +34,7 @@ class TimeView(QWidget):
         self._time_plot.addItem(self._interval_roi, ignoreBounds=True)
 
         myvb.set_plot_and_interval(self._time_plot, self._interval_roi)
+        myvb.set_interval_change_callback( self._get_app_state().set_time_interval )
 
         self._connect_app_signals()
 

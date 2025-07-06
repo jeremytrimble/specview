@@ -48,6 +48,7 @@ class SpecanView(QWidget):
         self._freq_plot.addItem(self._interval_roi, ignoreBounds=True)
 
         myvb.set_plot_and_interval(self._freq_plot, self._interval_roi)
+        myvb.set_interval_change_callback( self._get_app_state().set_frequency_interval )
 
         self._connect_app_signals()
 
