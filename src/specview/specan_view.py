@@ -71,7 +71,7 @@ class SpecanView(QWidget):
             return
 
         # TODO: cache the bisect result
-        self._time_idx = bisect_left( self._sgram.time_sec, t_sec )
+        self._time_idx = min( bisect_left( self._sgram.time_sec, t_sec ), len(self._sgram.time_sec) - 1 )
         self._redisplay()
         
 
