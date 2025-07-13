@@ -18,8 +18,9 @@ class TimeView(QWidget):
         self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'}, viewBox=myvb)
         self._time_plot.setMouseEnabled(x=True, y=True)
         self._time_plot.setYRange(-1.1, 1.1)
-        self._time_plot_curve_i = self._time_plot.plot([]) 
-        self._time_plot_curve_q = self._time_plot.plot([]) 
+        # TODO: check if downsampling is really helping
+        self._time_plot_curve_i = self._time_plot.plot([], downsample=True, name="real", pen=pg.mkPen('b')) 
+        self._time_plot_curve_q = self._time_plot.plot([], downsample=True, name="imaginary", pen=pg.mkPen('r')) 
 
         self._time_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
         self._time_plot.addItem(self._time_crosshair_x, ignoreBounds=True)
