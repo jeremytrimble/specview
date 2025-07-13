@@ -54,7 +54,7 @@ class TimeView(QWidget):
         app_state = self._get_app_state()
 
         # TODO: NEXT: START_HERE: Uncommenting this line makes everything crazy-slow -- why?
-        #app_state.selected_times_changed.connect(self._on_time_cursor_changed)
+        #app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
 
     def _on_time_cursor_changed(self, t_sec:float):
         self._time_crosshair_x.setPos(t_sec)
@@ -65,8 +65,19 @@ class TimeView(QWidget):
         # TODO: pick out the right channel
         chan = 0
 
-        self._time_plot_curve_i.setData(self._time_series.data[chan,:].real)
-        self._time_plot_curve_q.setData(self._time_series.data[chan,:].imag)
+        time_lo_sec = self._time_series.time_sec[0]
+        time_hi_sec = self._time_series.time_sec[-1]
+
+        self._time_plot.setXRange(time_lo_sec, time_hi_sec)
+
+        self._time_plot_curve_i.setData(
+            x = self._time_series.time_sec,
+            y = self._time_series.data[chan,:].real,
+        )
+        self._time_plot_curve_q.setData(
+            x = self._time_series.time_sec,
+            y = self._time_series.data[chan,:].imag,
+        )
 
 
     def setDisplayedTimeSeries(self, tser: TimeSeries):
