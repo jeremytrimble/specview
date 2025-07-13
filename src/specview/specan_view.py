@@ -50,6 +50,9 @@ class SpecanView(QWidget):
         myvb.set_plot_and_interval(self._freq_plot, self._interval_roi)
         myvb.set_interval_change_callback( self._frequency_interval_set )
 
+        # make sure the interval ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
+        self._interval_roi.sigRegionChanged.connect( lambda: self._frequency_interval_set(self._interval_roi.getRegion()) )
+
         self._connect_app_signals()
 
     def _get_app_state(self) -> AppState:
