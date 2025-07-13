@@ -113,8 +113,41 @@ class MainWindow(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
+        self._statusbar = self.statusBar()
+        self._statusbar.showMessage("Ready")  # Initial message in the status bar
+
+        self._connect_app_signals()
+
         self.resize(QSize(2000,1500))
 
+    def _connect_app_signals(self):
+        app_state = QApplication.instance().app_state
+        app_state.cursor_frequency_changed.connect(self._update_status_bar)
+        app_state.cursor_time_changed.connect(self._update_status_bar)
+        app_state.frequency_interval_changed.connect(self._update_status_bar)
+        app_state.time_interval_changed.connect(self._update_status_bar)
+
+    def _update_status_bar(self):
+        app_state = QApplication.instance().app_state
+
+        msg = ""
+        if app_state._frequency_interval is not None:
+            msg += f"Freq: [ {app_state._frequency_interval[0]/1e6:.2f} : {app_state._frequency_interval[1]/1e6:.2f} MHz ]"
+        elif app_state._cursor_frequency is not None:
+            msg += f"Freq: {app_state._cursor_frequency/1e6:.2f} MHz"
+        else:
+            msg += f"Freq: --"
+
+        msg += " | "
+
+        if app_state._time_interval is not None:
+            msg += f"Time: [ {app_state._time_interval[0]:.2f} : {app_state._time_interval[1]:.2f} ] sec"
+        elif app_state._cursor_time is not None:
+            msg += f"Time: {app_state._cursor_time:.2f} sec"
+        else:
+            msg += f"Time: --"
+
+        self._statusbar.showMessage(msg)
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
