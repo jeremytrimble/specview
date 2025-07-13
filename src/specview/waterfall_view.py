@@ -7,17 +7,22 @@ from .app_state import AppState
 
 from .util import signals_blocked
 
+from .ui_constants import INTERVAL_ROI_COLOR
+from .interval_select_viewbox import RectSelectViewBox
+
 class WaterfallView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._sgram : Spectrogram|None = None
 
+        myvb = RectSelectViewBox()
+
         # Layout container for waterfall related stuff
         waterfall_layout = QHBoxLayout()
 
         # Waterfall plot
-        self._waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [MHz]'})
+        self._waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [MHz]'}, viewBox=myvb)
         self._waterfall.plotItem.getViewBox().invertY(True)
         self._imageitem = pg.ImageItem(axisOrder='row-major')
         self._waterfall.addItem(self._imageitem)
@@ -38,10 +43,18 @@ class WaterfallView(QWidget):
         self._time_crosshair_y = pg.InfiniteLine(angle=0, movable=False)
         self._waterfall.addItem(self._time_crosshair_y, ignoreBounds=True)
 
-        self._roiPen = pg.mkPen("red", width=3)
+        self._roiPen = pg.mkPen(INTERVAL_ROI_COLOR, width=3)
         roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
         roi.setPen(self._roiPen)
-        roi.sigRegionChanged.connect(lambda x:print(f"Region changed: {x.getArraySlice(returnSlice=False)}"))
+        roi.setVisible(False) # Initially hidden
+
+        self._roi = roi
+
+        # make sure the rect ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
+        self._roi.sigRegionChanged.connect( lambda: self._waterfall_roi_set( self._region_from_rectroi(self._roi)) )
+
+        myvb.set_plot_and_rect(self._waterfall, self._roi)
+        myvb.set_roi_change_callback(self._waterfall_roi_set)
 
         self._waterfall.addItem(roi)
 
@@ -53,6 +66,28 @@ class WaterfallView(QWidget):
 
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
+
+    @classmethod
+    def _region_from_rectroi(cls, roi: pg.RectROI) -> tuple[float, float]:
+        pos = roi.pos()
+        size = roi.size()  # This returns a Point, not a tuple
+        # To get the rectangle as (left, top, right, bottom):
+        left = pos.x()
+        top = pos.y()
+        right = left + size.x()
+        bottom = top + size.y()
+        return (left, top, right, bottom)
+
+    def _waterfall_roi_set(self, region: tuple[float, float] | None):
+        #print(f"{region=}")
+        with signals_blocked(self):
+            if region is None:
+                self._get_app_state().set_frequency_interval(None)
+                self._get_app_state().set_time_interval(None)
+            else:
+                freq_lo_Hz, time_lo_sec, freq_hi_Hz, time_hi_sec = region
+                self._get_app_state().set_frequency_interval((freq_lo_Hz, freq_hi_Hz))
+                self._get_app_state().set_time_interval((time_lo_sec, time_hi_sec))
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()
