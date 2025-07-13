@@ -4,7 +4,7 @@ import pyqtgraph as pg
 from .spec_types import TimeSeries
 from .app_state import AppState
 
-from .interval_select_viewbox import IntervalSelectViewBox
+from .roi_select_viewboxes import IntervalSelectViewBox
 from .util import signals_blocked
 
 from .ui_constants import INTERVAL_ROI_COLOR

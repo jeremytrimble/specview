@@ -8,7 +8,7 @@ import pyqtgraph as pg
 
 from .ui_constants import INTERVAL_ROI_COLOR
 
-from .interval_select_viewbox import IntervalSelectViewBox
+from .roi_select_viewboxes import IntervalSelectViewBox
 
 from .spec_types import Spectrogram
 from .app_state import AppState

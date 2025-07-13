@@ -8,7 +8,7 @@ from .app_state import AppState
 from .util import signals_blocked
 
 from .ui_constants import INTERVAL_ROI_COLOR
-from .interval_select_viewbox import RectSelectViewBox
+from .roi_select_viewboxes import RectSelectViewBox
 
 class WaterfallView(QWidget):
     def __init__(self, *args, **kwargs):
