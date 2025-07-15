@@ -5,8 +5,6 @@ import pyqtgraph as pg
 from .spec_types import Spectrogram
 from .app_state import AppState
 
-from .util import signals_blocked
-
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import RectSelectViewBox
 
@@ -79,20 +77,41 @@ class WaterfallView(QWidget):
         return (left, top, right, bottom)
 
     def _waterfall_roi_set(self, region: tuple[float, float] | None):
-        #print(f"{region=}")
-        with signals_blocked(self):
-            if region is None:
-                self._get_app_state().set_frequency_interval(None)
-                self._get_app_state().set_time_interval(None)
-            else:
-                freq_lo_Hz, time_lo_sec, freq_hi_Hz, time_hi_sec = region
-                self._get_app_state().set_frequency_interval((freq_lo_Hz, freq_hi_Hz))
-                self._get_app_state().set_time_interval((time_lo_sec, time_hi_sec))
+        print(f"{region=}")
+        if region is None:
+            self._get_app_state().set_frequency_interval(None)
+            self._get_app_state().set_time_interval(None)
+        else:
+            freq_lo_Hz, time_lo_sec, freq_hi_Hz, time_hi_sec = region
+            self._get_app_state().set_frequency_interval((freq_lo_Hz, freq_hi_Hz))
+            self._get_app_state().set_time_interval((time_lo_sec, time_hi_sec))
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()
         app_state.cursor_frequency_changed.connect(self._on_cursor_frequency_changed)
         app_state.cursor_time_changed.connect(self._on_cursor_time_changed)
+
+        # TODO: uncommenting either of the below works, but not both
+        app_state.time_interval_changed.connect(self._on_interval_changed)
+        app_state.frequency_interval_changed.connect(self._on_interval_changed)
+
+    def _on_interval_changed(self):
+        app_state = self._get_app_state()
+
+        time_interval = app_state._time_interval
+        freq_interval = app_state._frequency_interval
+
+        if None in (time_interval, freq_interval):
+            self._roi.setVisible(False)
+        else:
+            # both intervals are set, so show the ROI
+            self._roi.setVisible(True)
+            time_lo_sec, time_hi_sec = time_interval
+            f_lo_Hz, f_hi_Hz = freq_interval
+            rect_roi = self._roi
+            # Update the position and size of the ROI
+            rect_roi.setPos((f_lo_Hz, time_lo_sec))
+            rect_roi.setSize((f_hi_Hz - f_lo_Hz, time_hi_sec - time_lo_sec))
 
     def _on_cursor_time_changed(self, t_sec: float):
         self._time_crosshair_y.setPos(t_sec)
@@ -141,9 +160,8 @@ class WaterfallView(QWidget):
             self._time_crosshair_y.setPos( time_sec )
 
             # TODO: handle frequency interval selection later:
-            with signals_blocked(self):
-                self._get_app_state().set_cursor_frequency(freq_Hz)
-                self._get_app_state().set_cursor_time(time_sec)
+            self._get_app_state().set_cursor_frequency(freq_Hz)
+            self._get_app_state().set_cursor_time(time_sec)
 
 
     def setDisplayedSpectrogramData(self, sgram:Spectrogram):

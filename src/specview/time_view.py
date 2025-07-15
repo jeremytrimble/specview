@@ -5,7 +5,6 @@ from .spec_types import TimeSeries
 from .app_state import AppState
 
 from .roi_select_viewboxes import IntervalSelectViewBox
-from .util import signals_blocked
 
 from .ui_constants import INTERVAL_ROI_COLOR
 
@@ -47,8 +46,7 @@ class TimeView(QWidget):
         return QApplication.instance().app_state
 
     def _time_interval_set(self, interval: tuple[float,float]|None):
-        with signals_blocked(self):
-            self._get_app_state().set_time_interval(interval)
+        self._get_app_state().set_time_interval(interval)
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()

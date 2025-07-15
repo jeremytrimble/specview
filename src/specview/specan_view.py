@@ -13,8 +13,6 @@ from .roi_select_viewboxes import IntervalSelectViewBox
 from .spec_types import Spectrogram
 from .app_state import AppState
 
-from .util import signals_blocked
-
 from bisect import bisect_left
 
 class SpecanView(QWidget):
@@ -64,8 +62,7 @@ class SpecanView(QWidget):
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
 
     def _frequency_interval_set(self, interval: tuple[float,float]|None):
-        with signals_blocked(self):
-            self._get_app_state().set_frequency_interval(interval)
+        self._get_app_state().set_frequency_interval(interval)
 
 
     def _on_time_cursor_changed(self, t_sec: float):
@@ -92,8 +89,7 @@ class SpecanView(QWidget):
             #print(f"Mouse position: x={mousePoint.x()}, y={mousePoint.y()}")
 
             # TODO: handle frequency interval selection later:
-            with signals_blocked(self):
-                self._get_app_state().set_cursor_frequency(freq_Hz)
+            self._get_app_state().set_cursor_frequency(freq_Hz)
 
     def _redisplay(self):
 
