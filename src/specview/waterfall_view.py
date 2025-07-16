@@ -128,14 +128,14 @@ class WaterfallView(QWidget):
         chan = 0
 
         f_Hz = self._sgram.freq_Hz
-        f_lo_Hz = f_Hz[0]
-        f_hi_Hz = f_Hz[-1]
+        f_lo_Hz = f_Hz.min
+        f_hi_Hz = f_Hz.max
 
         wfall_data = self._sgram.data[chan,:,:]
 
         time_sec = self._sgram.time_sec
-        time_lo_sec = time_sec[0]
-        time_hi_sec = time_sec[-1]
+        time_lo_sec = time_sec.min
+        time_hi_sec = time_sec.max
 
         wf_rect = QRectF(
             f_lo_Hz,

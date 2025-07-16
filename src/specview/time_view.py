@@ -63,17 +63,18 @@ class TimeView(QWidget):
         # TODO: pick out the right channel
         chan = 0
 
-        time_lo_sec = self._time_series.time_sec[0]
-        time_hi_sec = self._time_series.time_sec[-1]
+        time_lo_sec = self._time_series.time_sec.min
+        time_hi_sec = self._time_series.time_sec.max
 
+        print(f"{time_lo_sec=}, {time_hi_sec=}")
         self._time_plot.setXRange(time_lo_sec, time_hi_sec)
 
         self._time_plot_curve_i.setData(
-            x = self._time_series.time_sec,
+            x = self._time_series.time_sec.array,
             y = self._time_series.data[chan,:].real,
         )
         self._time_plot_curve_q.setData(
-            x = self._time_series.time_sec,
+            x = self._time_series.time_sec.array,
             y = self._time_series.data[chan,:].imag,
         )
 

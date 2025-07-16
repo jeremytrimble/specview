@@ -13,8 +13,6 @@ from .roi_select_viewboxes import IntervalSelectViewBox
 from .spec_types import Spectrogram
 from .app_state import AppState
 
-from bisect import bisect_left
-
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -70,8 +68,7 @@ class SpecanView(QWidget):
         if self._sgram is None:
             return
 
-        # TODO: cache the bisect result
-        self._time_idx = min( bisect_left( self._sgram.time_sec, t_sec ), len(self._sgram.time_sec) - 1 )
+        self._time_idx = self._sgram.time_sec.idx_nearest_to_value(t_sec)
         self._redisplay()
         
 
@@ -101,13 +98,13 @@ class SpecanView(QWidget):
         time_idx = self._time_idx
 
         f_Hz = self._sgram.freq_Hz
-        f_lo_Hz = f_Hz[0]
-        f_hi_Hz = f_Hz[-1]
+        f_lo_Hz = f_Hz.min
+        f_hi_Hz = f_Hz.max
 
         trace = self._sgram.data[chan,time_idx,:]
 
         self._freq_plot_curve.setData(
-            x = f_Hz,
+            x = f_Hz.array,
             y = trace,
         )
         #self._freq_plot.setAspectLocked(False)

@@ -24,6 +24,7 @@ from .time_view import TimeView
 from .specan_view import SpecanView
 from .waterfall_view import WaterfallView
 from .app_state import AppState
+from .monotonic_axis import MonotonicAxis
 
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
@@ -58,7 +59,7 @@ def load_capture(path:str, cap_idx:int):
 
         with measure_runtime("timeseries loading"):
             timedomain_data = smf.read_samples_in_capture(0)    # TODO: this seems to return a wrong/arbitrary number of samples in some cases
-        t = np.arange( len(timedomain_data) )/sample_rate_Hz
+        t = MonotonicAxis(slope=1/sample_rate_Hz, num_points=len(timedomain_data))
 
         with measure_runtime("FFT"):
             S = f.stft(timedomain_data)
@@ -77,6 +78,9 @@ def load_capture(path:str, cap_idx:int):
         #print(f"{Smag_dB.shape=}")
         #print(f"{len(spec_time_sec)=}, {len(spec_freq_Hz)=}")
         assert Smag_dB.shape == (len(spec_time_sec), len(spec_freq_Hz))
+
+        spec_freq_Hz = MonotonicAxis( slope = spec_freq_Hz[1] - spec_freq_Hz[0], num_points = len(spec_freq_Hz), intercept = spec_freq_Hz[0] )
+        spec_time_sec = MonotonicAxis( slope = spec_time_sec[1] - spec_time_sec[0], num_points = len(spec_time_sec), intercept = spec_time_sec[0] )
 
         spec = Spectrogram(
             channels=["ch0"],    #TODO

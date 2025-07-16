@@ -33,3 +33,5 @@ class MonotonicAxis:
         else:
             return idx
 
+    def __len__(self) -> int:
+        return self._num_points
