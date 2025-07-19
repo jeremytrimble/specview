@@ -3,6 +3,8 @@ from PyQt5.QtCore import QPointF, Qt
 from PyQt5.QtWidgets import QGraphicsSceneMouseEvent
 
 import typing
+
+from specview.util import region_from_rectroi
 CallbackType = typing.Callable[ [ tuple[float, float] | None ], None ]
 
 class IntervalSelectViewBox(pg.ViewBox):
@@ -113,8 +115,9 @@ class RectSelectViewBox(pg.ViewBox):
                 self._rect_roi.setPos(self._start_pos)
                 self._rect_roi.setSize((1.0, 1.0))
                 self._rect_roi.setVisible(True)
+                region = region_from_rectroi(self._rect_roi)  # Ensure the ROI is initialized
                 if self._cb:
-                    self._cb(tuple(sorted(self._start_pos)))
+                    self._cb(region)
                 return event.accept()
         super().mousePressEvent(event)
 

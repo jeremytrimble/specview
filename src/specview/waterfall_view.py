@@ -2,6 +2,8 @@ from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 import pyqtgraph as pg
 
+from specview.util import region_from_rectroi
+
 from .spec_types import Spectrogram
 from .app_state import AppState
 
@@ -49,7 +51,7 @@ class WaterfallView(QWidget):
         self._roi = roi
 
         # make sure the rect ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
-        self._roi.sigRegionChanged.connect( lambda: self._waterfall_roi_set( self._region_from_rectroi(self._roi)) )
+        self._roi.sigRegionChanged.connect( lambda: self._waterfall_roi_set( region_from_rectroi(self._roi)) )
 
         myvb.set_plot_and_rect(self._waterfall, self._roi)
         myvb.set_roi_change_callback(self._waterfall_roi_set)
@@ -65,16 +67,6 @@ class WaterfallView(QWidget):
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
 
-    @classmethod
-    def _region_from_rectroi(cls, roi: pg.RectROI) -> tuple[float, float]:
-        pos = roi.pos()
-        size = roi.size()  # This returns a Point, not a tuple
-        # To get the rectangle as (left, top, right, bottom):
-        left = pos.x()
-        top = pos.y()
-        right = left + size.x()
-        bottom = top + size.y()
-        return (left, top, right, bottom)
 
     def _waterfall_roi_set(self, region: tuple[float, float] | None):
         #print(f"{region=}")
