@@ -18,8 +18,11 @@ class TimeView(QWidget):
         self._time_plot.setMouseEnabled(x=True, y=True)
         self._time_plot.setYRange(-1.1, 1.1)
         # TODO: check if downsampling is really helping
-        self._time_plot_curve_i = self._time_plot.plot([], downsample=True, name="real", pen=pg.mkPen('b')) 
-        self._time_plot_curve_q = self._time_plot.plot([], downsample=True, name="imaginary", pen=pg.mkPen('r')) 
+        self._time_plot_curve_i = self._time_plot.plot([], name="real", pen=pg.mkPen('b')) 
+        self._time_plot_curve_q = self._time_plot.plot([], name="imaginary", pen=pg.mkPen('r')) 
+
+        self._time_plot_curve_i.setDownsampling(auto=True, method='peak')
+        self._time_plot_curve_q.setDownsampling(auto=True, method='peak')
 
         self._time_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
         self._time_plot.addItem(self._time_crosshair_x, ignoreBounds=True)
@@ -52,7 +55,7 @@ class TimeView(QWidget):
         app_state = self._get_app_state()
 
         # TODO: NEXT: START_HERE: Uncommenting this line makes everything crazy-slow -- why?
-        #app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
+        app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
 
     def _on_time_cursor_changed(self, t_sec:float):
         self._time_crosshair_x.setPos(t_sec)

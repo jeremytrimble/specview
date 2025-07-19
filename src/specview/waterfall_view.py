@@ -77,7 +77,7 @@ class WaterfallView(QWidget):
         return (left, top, right, bottom)
 
     def _waterfall_roi_set(self, region: tuple[float, float] | None):
-        print(f"{region=}")
+        #print(f"{region=}")
         if region is None:
             self._get_app_state().set_frequency_interval(None)
             self._get_app_state().set_time_interval(None)

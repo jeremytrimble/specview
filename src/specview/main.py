@@ -195,8 +195,8 @@ def main():
     window.waterfall_view.setDisplayedSpectrogramData(sgram)
 
     #app.app_state.selected_frequencies_changed.connect(lambda f1,f2: print(f1,f2))
-    app.app_state.time_interval_changed.connect(lambda x: print(f"time: {x=}"))
-    app.app_state.frequency_interval_changed.connect(lambda x: print(f"freq: {x=}"))
+    #app.app_state.time_interval_changed.connect(lambda x: print(f"time: {x=}"))
+    #app.app_state.frequency_interval_changed.connect(lambda x: print(f"freq: {x=}"))
 
 
     app.exec() # Start the event loop
