@@ -59,6 +59,8 @@ class SpecanView(QWidget):
         app_state.cursor_frequency_changed.connect(self._on_freq_cursor_changed)
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
 
+        # TODO: NEXT: START_HERE: Make this widget react to time and freq interval changes
+
     def _frequency_interval_set(self, interval: tuple[float,float]|None):
         self._get_app_state().set_frequency_interval(interval)
 

@@ -25,6 +25,8 @@ from .specan_view import SpecanView
 from .waterfall_view import WaterfallView
 from .app_state import AppState
 from .monotonic_axis import MonotonicAxis
+from .annotations_table import AnnotationsTable
+from .captures_panel import CapturesPanel
 
 dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
 
@@ -113,10 +115,14 @@ class MainWindow(QMainWindow):
         self.time_view = TimeView(parent=self)
         self.specan_view = SpecanView(parent=self)
         self.waterfall_view = WaterfallView(parent=self)
+        self.annotation_table = AnnotationsTable(parent=self)
+        self.captures_panel = CapturesPanel(parent=self)
 
         layout.addWidget(self.time_view, 1, 0)
         layout.addWidget(self.specan_view, 2, 0)
         layout.addWidget(self.waterfall_view, 3, 0)
+        layout.addWidget(self.annotation_table, 4, 0)
+        layout.addWidget(self.captures_panel, 5, 0)
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
