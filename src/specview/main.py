@@ -87,7 +87,8 @@ def load_capture(path:str, cap_idx:int):
             time_sec = spec_time_sec,
             freq_Hz=spec_freq_Hz,
             center_freq_Hz=center_freq_Hz,
-            data = Smag_dB.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
+            data = S.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
+            mag_dB = Smag_dB.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
         )
 
         return tdat, spec

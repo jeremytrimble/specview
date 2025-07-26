@@ -101,7 +101,7 @@ class SpecanView(QWidget):
         f_lo_Hz = f_Hz.min
         f_hi_Hz = f_Hz.max
 
-        trace = self._sgram.data[chan,time_idx,:]
+        trace = self._sgram.mag_dB[chan,time_idx,:]
 
         self._freq_plot_curve.setData(
             x = f_Hz.array,

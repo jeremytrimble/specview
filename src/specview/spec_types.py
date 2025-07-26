@@ -24,5 +24,6 @@ class Spectrogram:
     time_sec: MonotonicAxis    # timestamps, same length as first dimension of data
     freq_Hz: MonotonicAxis     # frequency, relative to center bin
     center_freq_Hz: float|None  # tuner center frequency if applicable, or None
-    data: np.ndarray # [channel, time, freq]
+    data: np.ndarray # [channel, time, freq], raw complex values
+    mag_dB: np.ndarray # [channel, time, freq], 20*log10(abs(data))
     cdtype: ComputedDataType = ComputedDataType.SPECTROGRAM

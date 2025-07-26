@@ -123,7 +123,7 @@ class WaterfallView(QWidget):
         f_lo_Hz = f_Hz.min
         f_hi_Hz = f_Hz.max
 
-        wfall_data = self._sgram.data[chan,:,:]
+        wfall_data = self._sgram.mag_dB[chan,:,:]
 
         time_sec = self._sgram.time_sec
         time_lo_sec = time_sec.min
