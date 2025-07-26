@@ -308,6 +308,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pyqtschema"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "pyqt5" },
+    { name = "qtpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/14/49/970b7aadb05a5573863238f7d8d7c06210cbe8bd560c3de81a6e9776c6eb/pyqtschema-0.2.0.tar.gz", hash = "sha256:103cbb257f5c6a77d003b22ae773645a6b9908b084e07062e74ba27ad00250be", size = 15127, upload-time = "2023-05-05T21:16:58.835Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/63/c1/f19797ed0952cc26cde5ed81c3cacfaf25741e17bd9148122ceca81d13db/pyqtschema-0.2.0-py3-none-any.whl", hash = "sha256:ad4f10557b7a913a3260a1fedb70bd66124a7974bbdab89d66cd2728e5161ae3", size = 19376, upload-time = "2023-05-05T21:16:57.304Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "8.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -321,6 +335,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/08/ba/45911d754e8eba3d5a841a5ce61a65a685ff1798421ac054f85aa8747dfb/pytest-8.4.1.tar.gz", hash = "sha256:7c67fd69174877359ed9371ec3af8a3d2b04741818c51e5e99cc1742251fa93c", size = 1517714, upload-time = "2025-06-18T05:48:06.109Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/29/16/c8a903f4c4dffe7a12843191437d7cd8e32751d5de349d45d3fe69544e87/pytest-8.4.1-py3-none-any.whl", hash = "sha256:539c70ba6fcead8e78eebbf1115e8b589e7565830d7d006a8723f19ac8a0afb7", size = 365474, upload-time = "2025-06-18T05:48:03.955Z" },
+]
+
+[[package]]
+name = "qtpy"
+version = "2.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/70/01/392eba83c8e47b946b929d7c46e0f04b35e9671f8bb6fc36b6f7945b4de8/qtpy-2.4.3.tar.gz", hash = "sha256:db744f7832e6d3da90568ba6ccbca3ee2b3b4a890c3d6fbbc63142f6e4cdf5bb", size = 66982, upload-time = "2025-02-11T15:09:25.759Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/76/37c0ccd5ab968a6a438f9c623aeecc84c202ab2fabc6a8fd927580c15b5a/QtPy-2.4.3-py3-none-any.whl", hash = "sha256:72095afe13673e017946cc258b8d5da43314197b741ed2890e563cf384b51aa1", size = 95045, upload-time = "2025-02-11T15:09:24.162Z" },
 ]
 
 [[package]]
@@ -509,6 +535,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyqt5" },
     { name = "pyqtgraph" },
+    { name = "pyqtschema" },
     { name = "pytest" },
     { name = "scipy" },
     { name = "sigmf" },
@@ -527,6 +554,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pyqt5", specifier = ">=5.15.11" },
     { name = "pyqtgraph", specifier = ">=0.13.7" },
+    { name = "pyqtschema", specifier = ">=0.2.0" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "scipy", specifier = ">=1.16.0" },
     { name = "sigmf", specifier = ">=1.2.10" },

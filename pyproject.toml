@@ -11,6 +11,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "pyqt5>=5.15.11",
     "pyqtgraph>=0.13.7",
+    "pyqtschema>=0.2.0",
     "pytest>=8.4.1",
     "scipy>=1.16.0",
     "sigmf>=1.2.10",
