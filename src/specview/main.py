@@ -94,6 +94,7 @@ def load_capture(path:str, cap_idx:int):
         return tdat, spec
 
 
+from .menu import populate_menubar
 
 
 # Subclass QMainWindow to customize your application's main window
@@ -105,6 +106,9 @@ class MainWindow(QMainWindow):
         #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
+
+        self._menubar = self.menuBar()
+        populate_menubar(self._menubar, self)
 
         self.time_view = TimeView(parent=self)
         self.specan_view = SpecanView(parent=self)
