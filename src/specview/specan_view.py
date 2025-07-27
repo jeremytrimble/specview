@@ -124,8 +124,12 @@ class SpecanView(QWidget):
 
         self._freq_plot.setXRange( f_lo_Hz, f_hi_Hz )
 
-        trace_lo = max(-150, round(trace.min(), -1))
-        trace_hi = min(+150, round(trace.max(), -1))
+        trace_lo = round(trace.min(), -1)
+        trace_hi = round(trace.max(), -1)
+        if not np.isfinite(trace_lo):
+            trace_lo = -150
+        if not np.isfinite(trace_hi):
+            trace_hi = +150
         self._freq_plot.setYRange( trace_lo, trace_hi )
 
         #self._freq_plot.setAspectLocked(True)
