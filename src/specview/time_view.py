@@ -1,6 +1,7 @@
 from PyQt5.QtCore import QPointF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 import pyqtgraph as pg
+import numpy as np
 
 from .spec_types import TimeSeries
 from .app_state import AppState
@@ -30,6 +31,8 @@ class TimeView(QWidget):
 
         self._time_plot.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
 
+        self._time_interval: tuple[float,float]|None = None
+
         layout = QHBoxLayout()
 
         layout.addWidget(self._time_plot)
@@ -57,10 +60,24 @@ class TimeView(QWidget):
     def _connect_app_signals(self):
         app_state = self._get_app_state()
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
+        app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
 
     def _on_time_cursor_changed(self, t_sec:float):
         self._time_crosshair_x.setPos(t_sec)
 
+    def _on_time_interval_changed_from_outside(self, time_interval: tuple[float,float]|None):
+        self._time_interval = time_interval
+        self._interval_roi.setVisible(self._time_interval is not None)
+        if self._time_interval is not None:
+            self._interval_roi.setRegion(self._time_interval)
+
+        # TODO: try to zoom to the selected time interval?
+        #if self._time_interval is not None:
+        #    t_lo_sec, t_hi_sec = time_interval
+        #    if np.isfinite(t_lo_sec) and np.isfinite(t_hi_sec):
+        #        duration_sec = t_hi_sec - t_lo_sec
+        #        buffer_sec = duration_sec*0.05
+        #        self._time_plot.setXRange(t_lo_sec-buffer_sec, t_hi_sec+buffer_sec)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
         #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
@@ -75,11 +92,10 @@ class TimeView(QWidget):
         # TODO: pick out the right channel
         chan = 0
 
-        time_lo_sec = self._time_series.time_sec.min
-        time_hi_sec = self._time_series.time_sec.max
-
-        print(f"{time_lo_sec=}, {time_hi_sec=}")
-        self._time_plot.setXRange(time_lo_sec, time_hi_sec)
+        # TODO: do this when new data is initially displayed
+        #time_lo_sec = self._time_series.time_sec.min
+        #time_hi_sec = self._time_series.time_sec.max
+        #self._time_plot.setXRange(time_lo_sec, time_hi_sec)
 
         self._time_plot_curve_i.setData(
             x = self._time_series.time_sec.array,

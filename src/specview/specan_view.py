@@ -40,6 +40,7 @@ class SpecanView(QWidget):
 
         self._time_idx = 0
         self._time_interval: tuple[float,float]|None = None
+        self._freq_interval: tuple[float,float]|None = None
 
         roiPen = pg.mkPen( pg.mkColor(INTERVAL_ROI_COLOR), width=3)
         self._interval_roi = pg.LinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen)
@@ -47,10 +48,10 @@ class SpecanView(QWidget):
         self._freq_plot.addItem(self._interval_roi, ignoreBounds=True)
 
         myvb.set_plot_and_interval(self._freq_plot, self._interval_roi)
-        myvb.set_interval_change_callback( self._frequency_interval_set )
+        myvb.set_interval_change_callback( self._freq_interval_set_from_specan )
 
         # make sure the interval ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
-        self._interval_roi.sigRegionChanged.connect( lambda: self._frequency_interval_set(self._interval_roi.getRegion()) )
+        self._interval_roi.sigRegionChanged.connect( lambda: self._freq_interval_set_from_specan(self._interval_roi.getRegion()) )
 
         self._connect_app_signals()
 
@@ -62,9 +63,16 @@ class SpecanView(QWidget):
         app_state.cursor_frequency_changed.connect(self._on_freq_cursor_changed)
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
+        app_state.frequency_interval_changed.connect(self._on_freq_interval_changed_from_outside)
 
-    def _frequency_interval_set(self, freq_interval: tuple[float,float]|None):
+    def _freq_interval_set_from_specan(self, freq_interval: tuple[float,float]|None):
         self._get_app_state().set_frequency_interval(freq_interval)
+
+    def _on_freq_interval_changed_from_outside(self, freq_interval: tuple[float,float]|None):
+        self._freq_interval = freq_interval
+        self._interval_roi.setVisible(self._freq_interval is not None)
+        if self._freq_interval is not None:
+            self._interval_roi.setRegion(self._freq_interval)
 
     def _on_time_interval_changed_from_outside(self, time_interval: tuple[float,float]|None):
         self._time_interval = time_interval
