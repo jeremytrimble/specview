@@ -1,3 +1,4 @@
+from PyQt5.QtCore import QPointF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 import pyqtgraph as pg
 
@@ -17,7 +18,7 @@ class TimeView(QWidget):
         self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'}, viewBox=myvb)
         self._time_plot.setMouseEnabled(x=True, y=True)
         self._time_plot.setYRange(-1.1, 1.1)
-        # TODO: check if downsampling is really helping
+
         self._time_plot_curve_i = self._time_plot.plot([], name="real", pen=pg.mkPen('b')) 
         self._time_plot_curve_q = self._time_plot.plot([], name="imaginary", pen=pg.mkPen('r')) 
 
@@ -26,6 +27,8 @@ class TimeView(QWidget):
 
         self._time_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
         self._time_plot.addItem(self._time_crosshair_x, ignoreBounds=True)
+
+        self._time_plot.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
 
         layout = QHBoxLayout()
 
@@ -57,6 +60,15 @@ class TimeView(QWidget):
 
     def _on_time_cursor_changed(self, t_sec:float):
         self._time_crosshair_x.setPos(t_sec)
+
+
+    def _on_scene_mouse_moved(self, pos: QPointF):
+        #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
+        if self._time_plot.sceneBoundingRect().contains(pos):
+            mousePoint = self._time_plot.getViewBox().mapSceneToView(pos)
+            time_sec = mousePoint.x()
+            self._time_crosshair_x.setPos( time_sec )
+            self._get_app_state().set_cursor_time(time_sec)
 
     def _redisplay(self):
 
