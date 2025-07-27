@@ -4,6 +4,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QPushButton, QComboBox,
 )
 
+import numpy as np
+
 import pyqtgraph as pg
 
 from .ui_constants import INTERVAL_ROI_COLOR
@@ -37,6 +39,7 @@ class SpecanView(QWidget):
         self.setLayout(layout)
 
         self._time_idx = 0
+        self._time_interval: tuple[float,float]|None = None
 
         roiPen = pg.mkPen( pg.mkColor(INTERVAL_ROI_COLOR), width=3)
         self._interval_roi = pg.LinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen)
@@ -58,21 +61,21 @@ class SpecanView(QWidget):
         app_state = self._get_app_state()
         app_state.cursor_frequency_changed.connect(self._on_freq_cursor_changed)
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
+        app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
 
-        # TODO: NEXT: START_HERE: Make this widget react to time and freq interval changes
+    def _frequency_interval_set(self, freq_interval: tuple[float,float]|None):
+        self._get_app_state().set_frequency_interval(freq_interval)
 
-    def _frequency_interval_set(self, interval: tuple[float,float]|None):
-        self._get_app_state().set_frequency_interval(interval)
-
+    def _on_time_interval_changed_from_outside(self, time_interval: tuple[float,float]|None):
+        self._time_interval = time_interval
+        self._redisplay()
 
     def _on_time_cursor_changed(self, t_sec: float):
-        # TODO: handle ranges later
         if self._sgram is None:
             return
 
         self._time_idx = self._sgram.time_sec.idx_nearest_to_value(t_sec)
         self._redisplay()
-        
 
     def _on_freq_cursor_changed(self, freq_Hz: float):
         self._freq_crosshair_x.setPos(freq_Hz)
@@ -84,10 +87,7 @@ class SpecanView(QWidget):
             freq_Hz = mousePoint.x()
             magnitude_dB = mousePoint.y()
             self._freq_crosshair_x.setPos( freq_Hz )
-            #self.crosshair_y.setPos(mousePoint.y())
-            #print(f"Mouse position: x={mousePoint.x()}, y={mousePoint.y()}")
 
-            # TODO: handle frequency interval selection later:
             self._get_app_state().set_cursor_frequency(freq_Hz)
 
     def _redisplay(self):
@@ -97,13 +97,24 @@ class SpecanView(QWidget):
 
         # TODO pull channel, time segment, etc
         chan = 0
-        time_idx = self._time_idx
 
         f_Hz = self._sgram.freq_Hz
         f_lo_Hz = f_Hz.min
         f_hi_Hz = f_Hz.max
 
-        trace = self._sgram.mag_dB[chan,time_idx,:]
+        if self._time_interval is None:
+            time_idx = self._time_idx
+            trace = self._sgram.mag_dB[chan,time_idx,:]
+        else:
+            t_lo_sec, t_hi_sec = self._time_interval
+            t_idx_lo = self._sgram.time_sec.idx_nearest_to_value(t_lo_sec)
+            t_idx_hi = self._sgram.time_sec.idx_nearest_to_value(t_hi_sec)
+            num_traces = t_idx_hi-t_idx_lo + 1
+            duration_sec = self._sgram.time_sec.value_at_idx(t_idx_hi) - self._sgram.time_sec.value_at_idx(t_idx_lo)
+
+            trace_mean = np.sum(np.abs(self._sgram.data[chan, t_idx_lo:t_idx_hi, :]), axis=0)/num_traces
+            trace = 20*np.log10(trace_mean)
+            # TODO: display that this is as measured across duration_sec
 
         self._freq_plot_curve.setData(
             x = f_Hz.array,
@@ -113,8 +124,8 @@ class SpecanView(QWidget):
 
         self._freq_plot.setXRange( f_lo_Hz, f_hi_Hz )
 
-        trace_lo = round(trace.min(), -1)
-        trace_hi = round(trace.max(), -1)
+        trace_lo = max(-150, round(trace.min(), -1))
+        trace_hi = min(+150, round(trace.max(), -1))
         self._freq_plot.setYRange( trace_lo, trace_hi )
 
         #self._freq_plot.setAspectLocked(True)

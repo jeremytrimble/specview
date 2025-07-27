@@ -53,13 +53,10 @@ class TimeView(QWidget):
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()
-
-        # TODO: NEXT: START_HERE: Uncommenting this line makes everything crazy-slow -- why?
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
 
     def _on_time_cursor_changed(self, t_sec:float):
         self._time_crosshair_x.setPos(t_sec)
-
 
     def _redisplay(self):
 

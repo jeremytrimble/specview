@@ -49,7 +49,7 @@ class AppState(QObject):
     cursor_time_changed      = pyqtSignal(float, name="cursor_time_changed")
 
     frequency_interval_changed = pyqtSignal( [object], name="frequency_interval_changed") # tuple[float,float]|None
-    time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")
+    time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")    # tuple[float,float]|None
 
     def __init__(self, parent = ...):
         super().__init__(parent)
