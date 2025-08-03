@@ -4,7 +4,6 @@ import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 import signal # TODO: let control-C actually close the app
 
-import scipy.signal, scipy.signal.windows
 
 import sigmf
 import logging
@@ -12,11 +11,9 @@ import logging
 from pathlib import Path
 import argparse
 
-from platformdirs import user_cache_dir
-import diskcache
 
 
-from specview.smf import smf_get_field_cap_or_global
+from specview.disk_cache import dcache
 from specview.spec_types import Spectrogram, TimeSeries
 from specview.util import measure_runtime
 
@@ -28,72 +25,7 @@ from .monotonic_axis import MonotonicAxis
 from .annotations_table import AnnotationsTable
 from .captures_panel import CapturesPanel
 
-dcache = diskcache.Cache( directory=user_cache_dir("specview", "jeremytrimble") )
-
 log = logging.getLogger("specview")
-
-def parse_args():
-    parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
-    parser.add_argument("file", default=None, type=Path, help="Path to a SigMF file to open.")
-
-    return parser.parse_args()
-
-@dcache.memoize()
-# note: Path not hashable repeatably
-def load_capture(path:str, cap_idx:int):
-    with measure_runtime("entirety of load_capture"):
-        path = Path(path)
-        smf = sigmf.sigmffile.fromfile(path)
-
-        #sample_rate_Hz = cap.get(sigmf.SigMFFile.SAMPLE_RATE_KEY) or smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
-        sample_rate_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.SAMPLE_RATE_KEY)
-        center_freq_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.FREQUENCY_KEY, None)
-
-        # TODO: capture as SpectrogramConfig pa.rameter
-        NFFT = 512 
-        win = scipy.signal.windows.hamming(NFFT)
-        f = scipy.signal.ShortTimeFFT(
-            win=win,
-            hop=len(win)-len(win)//4,
-            fs=sample_rate_Hz,
-            fft_mode="centered",
-        )
-
-        with measure_runtime("timeseries loading"):
-            timedomain_data = smf.read_samples_in_capture(0)    # TODO: this seems to return a wrong/arbitrary number of samples in some cases
-        t = MonotonicAxis(slope=1/sample_rate_Hz, num_points=len(timedomain_data))
-
-        with measure_runtime("FFT"):
-            S = f.stft(timedomain_data)
-            S = S.T # transpose so that now S.shape = [num_times x num_bins]
-        Smag_dB = 20*np.log10(np.abs(S))
-
-        tdat = TimeSeries(
-            time_sec=t,
-            channels=["ch0"], #TODO
-            data=timedomain_data.reshape([1,len(timedomain_data)]),
-        )
-
-        spec_freq_Hz = f.f
-        spec_time_sec = f.t(len(timedomain_data))
-
-        #print(f"{Smag_dB.shape=}")
-        #print(f"{len(spec_time_sec)=}, {len(spec_freq_Hz)=}")
-        assert Smag_dB.shape == (len(spec_time_sec), len(spec_freq_Hz))
-
-        spec_freq_Hz = MonotonicAxis( slope = spec_freq_Hz[1] - spec_freq_Hz[0], num_points = len(spec_freq_Hz), intercept = spec_freq_Hz[0] )
-        spec_time_sec = MonotonicAxis( slope = spec_time_sec[1] - spec_time_sec[0], num_points = len(spec_time_sec), intercept = spec_time_sec[0] )
-
-        spec = Spectrogram(
-            channels=["ch0"],    #TODO
-            time_sec = spec_time_sec,
-            freq_Hz=spec_freq_Hz,
-            center_freq_Hz=center_freq_Hz,
-            data = S.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
-            mag_dB = Smag_dB.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
-        )
-
-        return tdat, spec
 
 
 from .menu import populate_menubar
@@ -167,7 +99,7 @@ class MainWindow(QMainWindow):
 def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
     parser.add_argument("-C", "--clear-cache", default=False, action="store_true", help="Clear cache", dest="clear_cache")
-    parser.add_argument("file", default=None, type=Path, help="Path to a SigMF file to open.")
+    parser.add_argument("files", nargs="*", default=[], help="Path to SigMF file(s) to open.")
 
     return parser.parse_args()
 
@@ -176,39 +108,30 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     args = parse_args()
+    logging.critical(f"args: {args}")
 
     if args.clear_cache:
         dcache.clear()
     dcache.reset('size_limit', 10 *2**30)
     dcache.cull()
 
-    log.info(f"cache size before: {dcache.volume()}")
-    with measure_runtime(f"loading {args.file}"):
-        tser, sgram = load_capture(str(args.file), 0)
-    log.info(f"cache size after: {dcache.volume()}")
-
     app = QApplication([])
-    app.app_state = AppState(parent=app)
+    app_state = app.app_state = AppState(parent=app)
 
     window = MainWindow()
     window.show() # Windows are hidden by default
     signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 
-    #LIMIT = 4096
-    #tser: TimeSeries
-    #tser.data = tser.data[:,:LIMIT]
-    #tser.time_sec = tser.time_sec[:LIMIT]
+    log.info(f"cache size before: {dcache.volume()}")
+    for filepath in args.files:
+        filepath = Path(filepath)
+        with measure_runtime(f"loading {filepath}"):
+            app_state.load_sigmf_file(str(filepath))
 
-    sgram: Spectrogram
-
-    window.time_view.setDisplayedTimeSeries(tser)
-    window.specan_view.setDisplayedSpectrogramData(sgram)
-    window.waterfall_view.setDisplayedSpectrogramData(sgram)
-
-    #app.app_state.selected_frequencies_changed.connect(lambda f1,f2: print(f1,f2))
-    #app.app_state.time_interval_changed.connect(lambda x: print(f"time: {x=}"))
-    #app.app_state.frequency_interval_changed.connect(lambda x: print(f"freq: {x=}"))
-
+    #sgram: Spectrogram
+    #window.time_view.setDisplayedTimeSeries(tser)
+    #window.specan_view.setDisplayedSpectrogramData(sgram)
+    #window.waterfall_view.setDisplayedSpectrogramData(sgram)
 
     app.exec() # Start the event loop
 

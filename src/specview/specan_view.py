@@ -64,6 +64,12 @@ class SpecanView(QWidget):
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
         app_state.frequency_interval_changed.connect(self._on_freq_interval_changed_from_outside)
+        app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
+
+    def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
+        app_state = self._get_app_state()
+        tser, sgram = app_state.load_capture_data(fileid, cap_idx, channel_idx=0)   # TODO: handle multiple channels
+        self.setDisplayedSpectrogramData(sgram)
 
     def _freq_interval_set_from_specan(self, freq_interval: tuple[float,float]|None):
         self._get_app_state().set_frequency_interval(freq_interval)

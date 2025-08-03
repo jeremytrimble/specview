@@ -86,6 +86,12 @@ class WaterfallView(QWidget):
         # TODO: uncommenting either of the below works, but not both
         app_state.time_interval_changed.connect(self._on_interval_changed)
         app_state.frequency_interval_changed.connect(self._on_interval_changed)
+        app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
+
+    def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
+        app_state = self._get_app_state()
+        tser, sgram = app_state.load_capture_data(fileid, cap_idx, channel_idx=0)   # TODO: handle multiple channels
+        self.setDisplayedSpectrogramData(sgram)
 
     def _on_interval_changed(self):
         app_state = self._get_app_state()
