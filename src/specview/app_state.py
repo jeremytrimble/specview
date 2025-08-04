@@ -245,6 +245,7 @@ class AppState(QObject):
         """
         Load a SigMF file and return the LoadedFile object.
         """
+        file_path = Path(file_path)
         return self._loaded_files.load_file(file_path)
     
     def load_capture_data(self, loaded_fileid: str, cap_idx: int, channel_idx: int) -> tuple[TimeSeries, Spectrogram]:
@@ -256,4 +257,3 @@ class AppState(QObject):
             raise ValueError(f"Loaded file ID {loaded_fileid} not found in loaded files.")
         tser, sgram = load_capture(loaded_file.sigmf_file, cap_idx, channel_idx)
         return tser, sgram
-

@@ -126,14 +126,15 @@ def main():
     for filepath in args.files:
         filepath = Path(filepath)
         with measure_runtime(f"loading {filepath}"):
-            app_state.load_sigmf_file(str(filepath))
+            app_state.load_sigmf_file(filepath)
+
+    app.exec() # Start the event loop
 
     #sgram: Spectrogram
     #window.time_view.setDisplayedTimeSeries(tser)
     #window.specan_view.setDisplayedSpectrogramData(sgram)
     #window.waterfall_view.setDisplayedSpectrogramData(sgram)
 
-    app.exec() # Start the event loop
 
 if __name__ == "__main__":
     main()
