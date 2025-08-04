@@ -21,26 +21,43 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
         app_state: AppState = QApplication.instance().app_state
         app_state.save_current_file()
 
+    def do_save_as():
+        app_state: AppState = QApplication.instance().app_state
+        app_state.save_as(parent)
+
     save_action = QAction(text="Save", parent=parent)
     save_action.setShortcut("Ctrl+S")
     save_action.triggered.connect(do_save)
+
+    save_as_action = QAction(text="Save As...", parent=parent)
+    save_as_action.setShortcut("Ctrl+Shift+S")
+    save_as_action.triggered.connect(do_save_as)
 
     # TODO: make the menu do the real things I want
     file_menu = QMenu("&File", menu_bar)
     #file_menu.addAction("&Open", lambda: present_open_file_dialog(parent))
     file_menu.addAction(open_action)
     file_menu.addAction(save_action)
-    file_menu.addSeparator()
-    file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
+    file_menu.addAction(save_as_action)
+    #file_menu.addSeparator()
+    #file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
+
+    annotation_from_selection = QAction(text="Annotation from Selection", parent=parent)
+    annotation_from_selection.setShortcut("Ctrl+T")
+    annotation_from_selection.triggered.connect(lambda: print("TODO: annotaton_from_selection!!!"))
+
+    annotations_menu = QMenu("&Annotations", menu_bar)
+    annotations_menu.addAction(annotation_from_selection)
     
-    view_menu = QMenu("&View", menu_bar)
-    view_menu.addAction("Toggle &Fullscreen", lambda: print("Toggle Fullscreen action triggered"))
+    #view_menu = QMenu("&View", menu_bar)
+    #view_menu.addAction("Toggle &Fullscreen", lambda: print("Toggle Fullscreen action triggered"))
     
     help_menu = QMenu("&Help", menu_bar)
     help_menu.addAction("&About", lambda: print("About action triggered"))
 
     menu_bar.addMenu(file_menu)
-    menu_bar.addMenu(view_menu)
+    #menu_bar.addMenu(view_menu)
+    menu_bar.addMenu(annotations_menu)
     menu_bar.addMenu(help_menu)
 
 def present_open_file_dialog(parent):

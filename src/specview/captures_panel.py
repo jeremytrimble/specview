@@ -53,7 +53,7 @@ class CapturesPanel(QWidget):
         self.tree_widget.clear()
 
         file_items = []
-        for loaded_file in app_state._loaded_files._fileid_to_loadedfile.values():
+        for loaded_file in app_state._loaded_files.loaded_file_dict.values():
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
             file_item = QTreeWidgetItem([loaded_file.file_path.name])

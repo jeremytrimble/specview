@@ -1,6 +1,6 @@
 from __future__ import annotations
 from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
+from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QFileDialog, QMessageBox
 
 from contextlib import contextmanager
 import typing
@@ -16,6 +16,12 @@ from specview.util import measure_runtime
 from specview.smf import smf_get_field_cap_or_global
 import scipy.signal, scipy.signal.windows
 import numpy as np
+
+import logging
+
+import shutil
+
+log = logging.getLogger("app_state")
 
 #import enum
 #class FreqSelectionType(enum.IntEnum):
@@ -85,6 +91,10 @@ class LoadedFiles:
         loaded_file = LoadedFile(file_path=file_path, sigmf_file=sigmf_file)
         self._fileid_to_loadedfile[loaded_file.open_file_id] = loaded_file
         return loaded_file
+
+    @property
+    def loaded_file_dict(self):
+        return self._fileid_to_loadedfile
 
     def close_file(self, fileid: str):
         if fileid in self._fileid_to_loadedfile:
@@ -263,7 +273,7 @@ class AppState(QObject):
         """
         file_path = Path(file_path)
 
-        is_first_load = len(self._loaded_files._fileid_to_loadedfile) == 0
+        is_first_load = len(self._loaded_files.loaded_file_dict) == 0
 
         loaded_file = self._loaded_files.load_file(file_path)
 
@@ -278,8 +288,55 @@ class AppState(QObject):
         """
         Load a capture from a SigMF file and return the TimeSeries and Spectrogram objects.
         """
-        loaded_file = self._loaded_files._fileid_to_loadedfile.get(loaded_fileid)
+        loaded_file = self._loaded_files.loaded_file_dict.get(loaded_fileid)
         if loaded_fileid is None:
             raise ValueError(f"Loaded file ID {loaded_fileid} not found in loaded files.")
         tser, sgram = load_capture(loaded_file.sigmf_file, cap_idx, channel_idx)
         return tser, sgram
+
+    def save_current_file(self):
+        if self._selected_capture_fileid is None:
+            return
+
+        current_loaded_file = self._loaded_files.loaded_file_dict[self._selected_capture_fileid]
+        smf = current_loaded_file.sigmf_file
+        with measure_runtime(f"Save SigMF File: {smf.data_file}", log_level=logging.CRITICAL):
+            meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)["meta_fn"]
+            smf.tofile(file_path=meta_filename)
+
+    def save_as(self, parent):
+
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontConfirmOverwrite
+        file_name, _ = QFileDialog.getSaveFileName(parent, "Save SigMF File As", "", "SigMF Files (*.sigmf-meta)", options=options)
+        if file_name:
+            log.info(f"Selected file for save as: {file_name}")
+            new_filenames_dict = sigmf.sigmffile.get_sigmf_filenames(file_name)
+            new_base_fn = new_filenames_dict.pop("base_fn")
+            existing = [ p for p in new_filenames_dict.values() if p.exists() ]
+
+            if existing:
+                reply = QMessageBox.question(self, "OK to overwrite?",
+                        f"SIGMF File(s) already exist with the base name: \n{new_base_fn.name}\n Do you want to overwrite these file(s)?",
+                        QMessageBox.Yes | QMessageBox.Cancel)
+                if reply != QMessageBox.Yes:
+                    return
+                
+            current_loaded_file = self._loaded_files.loaded_file_dict[self._selected_capture_fileid]
+            smf = current_loaded_file.sigmf_file
+
+            existing_filenames_dict = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)
+
+            with measure_runtime(f"Save As to {new_base_fn}"):
+                shutil.copy( 
+                    existing_filenames_dict["data_fn"],
+                    new_filenames_dict["data_fn"],
+                )
+                smf.set_data_file( new_filenames_dict["data_fn"] )
+                smf.tofile( new_filenames_dict["meta_fn"] )
+
+                # TODO: reload data content somehow?
+                current_loaded_file.file_path = new_filenames_dict["meta_fn"]
+
+
+
