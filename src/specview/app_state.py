@@ -100,6 +100,11 @@ class LoadedFiles:
             # TODO: should this raise an exception or just do nothing?
             raise ValueError(f"File ID {fileid} not found in loaded files.")
 
+def make_numpy_array_readonly(arr: np.ndarray) -> np.ndarray:
+    """
+    Convert a numpy array to a read-only array.
+    """
+    return arr.setflags(write=False)
 
 @dcache.memoize()
 # note: Path not hashable repeatably
@@ -121,6 +126,7 @@ def load_capture(smf:sigmf.SigMFFile, cap_idx:int, channel_idx:int = 0) -> tuple
 
         with measure_runtime("timeseries loading"):
             timedomain_data = smf.read_samples_in_capture(cap_idx)    # TODO: this seems to return a wrong/arbitrary number of samples in some cases
+            make_numpy_array_readonly(timedomain_data)
             # TODO: handle multiple channels correctly here
             assert channel_idx == 0, "Only channel 0 is currently supported in load_capture"
         t = MonotonicAxis(slope=1/sample_rate_Hz, num_points=len(timedomain_data))
@@ -129,6 +135,9 @@ def load_capture(smf:sigmf.SigMFFile, cap_idx:int, channel_idx:int = 0) -> tuple
             S = f.stft(timedomain_data)
             S = S.T # transpose so that now S.shape = [num_times x num_bins]
         Smag_dB = 20*np.log10(np.abs(S))
+
+        make_numpy_array_readonly(S)
+        make_numpy_array_readonly(Smag_dB)
 
         tdat = TimeSeries(
             time_sec=t,
