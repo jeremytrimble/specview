@@ -31,9 +31,19 @@ class CapturesPanel(QWidget):
         app_state = self._get_app_state()
         app_state.loaded_files_changed.connect(self.populate_tree)
 
-    def _on_current_item_changed(self, *args, **kwargs):
-        log.debug(f"current item changed: {args=}, {kwargs=}")
+    def _on_current_item_changed(self, selected: QTreeWidgetItem|None, deselected:QTreeWidgetItem|None):
+        #log.debug(f"current item changed: {args=}, {kwargs=}")
+        if selected is None:
+            return
 
+        parent = selected.parent()
+        if parent is None:
+            return
+        idx = parent.indexOfChild(selected)
+        fileid = parent.open_file_id
+
+        app_state = self._get_app_state()
+        app_state.set_selected_capture(fileid, idx)
 
     def populate_tree(self):
         app_state = self._get_app_state()
@@ -47,6 +57,8 @@ class CapturesPanel(QWidget):
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
             file_item = QTreeWidgetItem([loaded_file.file_path.name])
+            file_item.open_file_id = loaded_file.open_file_id
+            #file_item.setData(0, 1, loaded_file.open_file_id)
             #file_item.setData(0, 0, loaded_file.file_path.name)
             smf = loaded_file.sigmf_file
             for cap_idx, capture in enumerate(smf.get_captures()):

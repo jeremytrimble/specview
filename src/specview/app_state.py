@@ -83,14 +83,9 @@ class LoadedFiles:
     def load_file(self, file_path: Path) -> LoadedFile:
         sigmf_file = sigmf.sigmffile.fromfile(file_path)
         loaded_file = LoadedFile(file_path=file_path, sigmf_file=sigmf_file)
-        is_first_load = len(self._fileid_to_loadedfile) == 0
         self._fileid_to_loadedfile[loaded_file.open_file_id] = loaded_file
-        self._app_state.loaded_files_changed.emit( loaded_file.open_file_id, LoadedFileAction.OPENED )  
-        if is_first_load:
-            self._app_state.selected_capture_changed.emit( loaded_file.open_file_id, 0 )
-            self._app_state.selected_channel_changed.emit(0)  # default to channel 0
-
         return loaded_file
+
     def close_file(self, fileid: str):
         if fileid in self._fileid_to_loadedfile:
             loaded_file = self._fileid_to_loadedfile[fileid]
@@ -201,6 +196,9 @@ class AppState(QObject):
         self._time_interval: tuple[float,float]|None = None
         self._frequency_interval: tuple[float,float]|None = None
 
+        self._selected_capture_fileid: str|None = None
+        self._selected_capture_idx: int|None = None
+
         self._cursor_frequency_gate = SignalGate()
         self._cursor_time_gate = SignalGate()
         self._time_interval_gate = SignalGate()
@@ -224,7 +222,6 @@ class AppState(QObject):
             with self._frequency_interval_gate.updating():
                 self.frequency_interval_changed.emit(self._frequency_interval)
 
-
     def set_cursor_frequency(self, f_Hz:float):
         if self._cursor_frequency_gate.in_progress:
             return
@@ -241,12 +238,41 @@ class AppState(QObject):
             with self._cursor_time_gate.updating():
                 self.cursor_time_changed.emit( self._cursor_time )
 
+    def set_selected_capture(self, fileid:str, capture_idx:int):
+        old_fileid = self._selected_capture_fileid
+        old_capture_idx = self._selected_capture_idx
+
+        self._selected_capture_fileid = fileid
+        self._selected_capture_idx = capture_idx
+
+        if self._selected_capture_idx == old_capture_idx and self._selected_capture_fileid == old_fileid:
+            return
+
+        self.set_frequency_interval(None)
+        self.set_time_interval(None)
+        self.set_cursor_time(0.0)
+        self.set_cursor_frequency(0.0)
+
+        self.selected_capture_changed.emit( self._selected_capture_fileid, self._selected_capture_idx )
+        self.selected_channel_changed.emit(0)  # default to channel 0  TODO: do something with channels
+
+
     def load_sigmf_file(self, file_path: Path) -> LoadedFile:
         """
         Load a SigMF file and return the LoadedFile object.
         """
         file_path = Path(file_path)
-        return self._loaded_files.load_file(file_path)
+
+        is_first_load = len(self._loaded_files._fileid_to_loadedfile) == 0
+
+        loaded_file = self._loaded_files.load_file(file_path)
+
+        self.loaded_files_changed.emit( loaded_file.open_file_id, LoadedFileAction.OPENED )  
+        if is_first_load:
+            self.set_selected_capture(loaded_file.open_file_id, 0)
+
+        return loaded_file
+
     
     def load_capture_data(self, loaded_fileid: str, cap_idx: int, channel_idx: int) -> tuple[TimeSeries, Spectrogram]:
         """
