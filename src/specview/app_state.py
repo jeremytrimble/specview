@@ -316,7 +316,7 @@ class AppState(QObject):
             existing = [ p for p in new_filenames_dict.values() if p.exists() ]
 
             if existing:
-                reply = QMessageBox.question(self, "OK to overwrite?",
+                reply = QMessageBox.question(parent, "OK to overwrite?",
                         f"SIGMF File(s) already exist with the base name: \n{new_base_fn.name}\n Do you want to overwrite these file(s)?",
                         QMessageBox.Yes | QMessageBox.Cancel)
                 if reply != QMessageBox.Yes:
