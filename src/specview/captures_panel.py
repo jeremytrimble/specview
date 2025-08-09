@@ -57,7 +57,7 @@ class CapturesPanel(QWidget):
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
             file_item = QTreeWidgetItem([loaded_file.file_path.name])
-            file_item.open_file_id = loaded_file.open_file_id
+            file_item.open_file_id = loaded_file._open_file_id
             #file_item.setData(0, 1, loaded_file.open_file_id)
             #file_item.setData(0, 0, loaded_file.file_path.name)
             smf = loaded_file.sigmf_file

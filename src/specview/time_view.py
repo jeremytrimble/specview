@@ -62,6 +62,8 @@ class TimeView(QWidget):
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
+        # TODO: process selected channel changes
+        #app_state.selected_channel_changed.connect(self._on_selected_channel_changed)
 
     def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
         app_state = self._get_app_state()

@@ -71,11 +71,144 @@ class LoadedFileCounter:
 LFC = LoadedFileCounter()
 del LoadedFileCounter
 
-@dataclasses.dataclass
+class LoadedAnnotationDict(dict):
+    """
+    A dictionary-like object that represents an annotation loaded from a SigMF file.
+    It is tied to a parent LoadedFile and notifies it when the annotation is modified.
+    It also provides a method to create a new annotation dictionary, which is
+    not intended to be used directly, but rather through the LoadedFile's
+    add_annotation method which returns an instance of this class.
+    """
+    @classmethod
+    def create_annotation_dict(cls, parent_loadedfile: LoadedFile, annotation_id:str, annotation_content:dict) -> LoadedAnnotationDict:
+        rv = cls(annotation_content)
+        rv._parent_loadedfile = parent_loadedfile
+        rv._annotation_id = annotation_id
+        rv._deleted = False
+        return rv
+    
+    def _notify_parent_that_i_was_modified(self):
+        if self._parent_loadedfile is not None:
+            self._parent_loadedfile._annotation_changed(self._annotation_id, LoadedAnnotationDictAction.MODIFIED)
+
+    def __setitem__(self, key, value):
+        rv = super().__setitem__(key, value)
+        self._notify_parent_that_i_was_modified
+        return rv
+    
+    def __delitem__(self, key):
+        rv = super().__delitem__(key)
+        self._notify_parent_that_i_was_modified
+        return rv   
+
+    def update(self, *args, **kwargs):
+        rv = super().update(*args, **kwargs)
+        self._notify_parent_that_i_was_modified()
+        return rv
+
+    def pop(self, key, *args):
+        rv = super().pop(key, *args)
+        self._notify_parent_that_i_was_modified()
+        return rv
+    
+    def clear(self):
+        rv = super().clear()
+        self._notify_parent_that_i_was_modified()
+        return rv   
+
+    def delete_annotation(self):
+        if not self._deleted:
+            self._parent_loadedfile._id_to_annotation.pop(self._annotation_id, None)
+            self._parent_loadedfile._annotation_changed(self._annotation_id, LoadedAnnotationDictAction.DELETED)
+            self._parent_loadedfile = None
+        self._deleted = True
+
+class LoadedAnnotationDictAction(enum.Enum):
+    ADDED = "added"
+    MODIFIED = "modified"
+    DELETED = "deleted"
+
+    def __str__(self):
+        return self.value
+
+    def __repr__(self):
+        return f"LoadedAnnotationDictAction.{self.value.upper()}"
+
+
 class LoadedFile:
-    file_path: Path
-    sigmf_file: sigmf.SigMFFile
-    open_file_id: str = dataclasses.field(default_factory=LFC.get_next_open_file_id)
+    """
+    A class representing a loaded SigMF file.
+    It contains the file path, the SigMFFile object, and a dictionary of annotations.
+    It also provides methods to add annotations and get the annotations.
+    It emits signals when annotations are added, modified, or deleted.
+    """
+    def __init__(self, file_path: Path):
+        # Note: file_path is the path to the .sigmf-meta file
+        # sigmf_file is the SigMFFile object loaded from that file
+        self._sigmf_file: sigmf.SigMFFile = sigmf.sigmffile.fromfile(file_path)
+        self._file_path: Path = Path(self._sigmf_file.data_file)  # This is the path to the .sigmf-data file
+        self._open_file_id: str = LFC.get_next_open_file_id()
+
+        self._id_to_annotation: dict[str, LoadedAnnotationDict] = {}
+        self._annotation_id_counter: int = 0
+
+        for annotation_dict in self._sigmf_file.get_annotations():
+            annotation_id = self._get_next_annotation_id()
+            self._id_to_annotation[annotation_id] = LoadedAnnotationDict.create_annotation_dict(parent_loadedfile=self, annotation_id=annotation_id, annotation_content=annotation_dict)
+
+
+    @property
+    def sigmf_file(self) -> sigmf.SigMFFile:
+        return self._sigmf_file
+
+    @property
+    def file_path(self) -> Path:
+        return self._file_path
+
+    def _annotation_changed(self, annotation_id:str, action:LoadedAnnotationDictAction) -> None:
+        """
+        Called when one of our children annotations has changed.
+        Emits the annotation_changed signal with the file ID and the set of changed annotations.
+        """
+        if annotation_id in self._id_to_annotation:
+            app_state: AppState = QApplication.instance().app_state
+            app_state.annotation_changed.emit(self._open_file_id, {annotation_id}, action)
+
+    def _get_next_annotation_id(self) -> str:
+        """
+        Returns the next annotation ID for this file.
+        """
+        annotation_id = f"annot{self._annotation_id_counter:03d}"
+        self._annotation_id_counter += 1
+        return annotation_id
+
+    def add_annotation(self, annotation_content: dict) -> LoadedAnnotationDict:
+        """
+        Add a new annotation to this file.
+        Returns the AnnotationDict for the new annotation.
+        """
+        annotation_id = self._get_next_annotation_id()
+        new_annotation = LoadedAnnotationDict.create_annotation_dict(self, annotation_id, annotation_content)
+        self._id_to_annotation[annotation_id] = new_annotation
+        self._annotation_changed(annotation_id, LoadedAnnotationDictAction.ADDED)
+        return new_annotation
+
+    def get_annotations_dict(self) -> dict[str, LoadedAnnotationDict]:
+        """
+        Returns a dictionary of annotations for this file.
+        The keys are the annotation IDs and the values are the LoadedAnnotationDict objects.
+        """
+        return dict(self._id_to_annotation)
+
+    def get_annotations(self) -> typing.Sequence[LoadedAnnotationDict]:
+        """
+        Returns the annotations for this file.
+        """
+        return list(self._id_to_annotation.values())
+
+    def clear_annotations(self) -> None:
+        for ad in self.get_annotations():
+            ad.delete_annotation()
 
 class LoadedFileAction(enum.Enum):
     OPENED = "opened"
@@ -87,9 +220,8 @@ class LoadedFiles:
         self._fileid_to_loadedfile: dict[str, LoadedFile] = {}
 
     def load_file(self, file_path: Path) -> LoadedFile:
-        sigmf_file = sigmf.sigmffile.fromfile(file_path)
-        loaded_file = LoadedFile(file_path=file_path, sigmf_file=sigmf_file)
-        self._fileid_to_loadedfile[loaded_file.open_file_id] = loaded_file
+        loaded_file = LoadedFile(file_path=file_path)
+        self._fileid_to_loadedfile[loaded_file._open_file_id] = loaded_file
         return loaded_file
 
     @property
@@ -100,7 +232,7 @@ class LoadedFiles:
         if fileid in self._fileid_to_loadedfile:
             loaded_file = self._fileid_to_loadedfile[fileid]
             del self._fileid_to_loadedfile[fileid]
-            self._app_state.loaded_files_changed.emit( (loaded_file.open_file_id, LoadedFileAction.CLOSED) )
+            self._app_state.loaded_files_changed.emit( (loaded_file._open_file_id, LoadedFileAction.CLOSED) )
         else:
             # TODO: should this raise an exception or just do nothing?
             raise ValueError(f"File ID {fileid} not found in loaded files.")
@@ -184,6 +316,8 @@ class AppState(QObject):
     loaded_files_changed = pyqtSignal([str, LoadedFileAction], name='loaded_files_changed') # emitted when a file is opened or closed
     selected_capture_changed = pyqtSignal([str,int], name='selected_capture_changed') # emitted with (fileid, index) when a capture is selected
     selected_channel_changed = pyqtSignal(int, name='selected_channel_changed') # emitted with channel_index when a channel is selected
+
+    annotation_changed = pyqtSignal([str,str,str], name='annotation_changed') # emitted with (fileid, annotation_id, AnnotationDictAction) when annotations is modified
 
     def __init__(self, parent = ...):
         super().__init__(parent)
@@ -277,9 +411,9 @@ class AppState(QObject):
 
         loaded_file = self._loaded_files.load_file(file_path)
 
-        self.loaded_files_changed.emit( loaded_file.open_file_id, LoadedFileAction.OPENED )  
+        self.loaded_files_changed.emit( loaded_file._open_file_id, LoadedFileAction.OPENED )  
         if is_first_load:
-            self.set_selected_capture(loaded_file.open_file_id, 0)
+            self.set_selected_capture(loaded_file._open_file_id, 0)
 
         return loaded_file
 
