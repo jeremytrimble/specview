@@ -71,6 +71,56 @@ class LoadedFileCounter:
 LFC = LoadedFileCounter()
 del LoadedFileCounter
 
+def get_annotation_time_bound_relative_to_current_capture(adict: dict, current_capture_idx:int, sigmf_file: sigmf.SigMFFile, return_none_if_disjoint:bool=True ) -> tuple[float,float]|None:
+
+    ann_start_idx = adict.get(sigmf.SigMFFile.START_INDEX_KEY)
+    ann_length_samples = adict.get(sigmf.SigMFFile.LENGTH_INDEX_KEY)
+
+    if ann_start_idx is None or ann_length_samples is None:
+        return None
+    
+    ann_start_idx = int(ann_start_idx)
+    ann_length_samples = int(ann_length_samples)
+
+    if ann_start_idx < 0 or ann_length_samples <= 0:
+        return None
+
+    sample_rate_Hz = sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+    if sample_rate_Hz is None:
+        raise ValueError("Global SAMPLE_RATE_KEY not found in SigMF file.")
+
+    # Get the start index from the annotation dictionary or the capture
+    captures_array = sigmf_file.get_captures()
+    cdict = captures_array[current_capture_idx]
+    # Note: LENGTH_INDEX_KEY is only defined in annotations, never in captures
+    # Note: START_INDEX_KEY is REQUIRED in all captures
+    capture_start_idx = cdict[sigmf.SigMFFile.START_INDEX_KEY]
+
+    if current_capture_idx + 1 < len(captures_array):
+        next_cdict = captures_array[current_capture_idx + 1]
+        capture_end_idx = next_cdict[sigmf.SigMFFile.START_INDEX_KEY]
+        del next_cdict
+    else:
+        capture_end_idx = sigmf_file.sample_count   # this is the total number of samples in the data file
+    capture_duration_sec = (capture_end_idx - capture_start_idx) / sample_rate_Hz
+    if capture_duration_sec <= 0:
+        raise ValueError("Capture has non-positive duration.")
+
+    samples_from_beginning_of_capture = ann_start_idx - capture_start_idx
+
+    start_time_sec = samples_from_beginning_of_capture / sample_rate_Hz
+    end_time_sec = (samples_from_beginning_of_capture + ann_length_samples) / sample_rate_Hz
+
+    if return_none_if_disjoint:
+        # if both start and end are before the capture start, or both are after the capture end, then return None
+        if end_time_sec < 0 and start_time_sec < 0:
+            return None
+        if start_time_sec > capture_duration_sec and end_time_sec > capture_duration_sec:
+            return None
+
+    return start_time_sec, end_time_sec
+
+
 class LoadedAnnotationDict(dict):
     """
     A dictionary-like object that represents an annotation loaded from a SigMF file.
@@ -93,12 +143,12 @@ class LoadedAnnotationDict(dict):
 
     def __setitem__(self, key, value):
         rv = super().__setitem__(key, value)
-        self._notify_parent_that_i_was_modified
+        self._notify_parent_that_i_was_modified()
         return rv
     
     def __delitem__(self, key):
         rv = super().__delitem__(key)
-        self._notify_parent_that_i_was_modified
+        self._notify_parent_that_i_was_modified()
         return rv   
 
     def update(self, *args, **kwargs):
@@ -122,6 +172,10 @@ class LoadedAnnotationDict(dict):
             self._parent_loadedfile._annotation_changed(self._annotation_id, LoadedAnnotationDictAction.DELETED)
             self._parent_loadedfile = None
         self._deleted = True
+
+    @property
+    def annotation_id(self) -> str:
+        return self._annotation_id
 
 class LoadedAnnotationDictAction(enum.Enum):
     ADDED = "added"
@@ -170,9 +224,10 @@ class LoadedFile:
         Called when one of our children annotations has changed.
         Emits the annotation_changed signal with the file ID and the set of changed annotations.
         """
-        if annotation_id in self._id_to_annotation:
+        annotation_dict = self._id_to_annotation.get(annotation_id)
+        if annotation_dict is not None:
             app_state: AppState = QApplication.instance().app_state
-            app_state.annotation_changed.emit(self._open_file_id, {annotation_id}, action)
+            app_state.annotation_changed.emit(self._open_file_id, annotation_dict, action)
 
     def _get_next_annotation_id(self) -> str:
         """
@@ -248,6 +303,8 @@ def make_numpy_array_readonly(arr: np.ndarray) -> np.ndarray:
 def load_capture(smf:sigmf.SigMFFile, cap_idx:int, channel_idx:int = 0) -> tuple[TimeSeries, Spectrogram]:
     with measure_runtime("entirety of load_capture"):
         #sample_rate_Hz = cap.get(sigmf.SigMFFile.SAMPLE_RATE_KEY) or smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+
+        #TODO: I think that SAMPLE_RATE_KEY should only be defined in the global fields, not in the capture fields, right?
         sample_rate_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.SAMPLE_RATE_KEY)
         center_freq_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.FREQUENCY_KEY, 0.0)
 
@@ -317,7 +374,7 @@ class AppState(QObject):
     selected_capture_changed = pyqtSignal([str,int], name='selected_capture_changed') # emitted with (fileid, index) when a capture is selected
     selected_channel_changed = pyqtSignal(int, name='selected_channel_changed') # emitted with channel_index when a channel is selected
 
-    annotation_changed = pyqtSignal([str,str,str], name='annotation_changed') # emitted with (fileid, annotation_id, AnnotationDictAction) when annotations is modified
+    annotation_changed = pyqtSignal([str,object,str], name='annotation_changed') # emitted with (fileid, LoadedAnnotationDict, AnnotationDictAction) when annotations is modified
 
     def __init__(self, parent = ...):
         super().__init__(parent)
