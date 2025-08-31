@@ -105,7 +105,7 @@ def parse_args():
 
 def main():
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     args = parse_args()
     logging.critical(f"args: {args}")
