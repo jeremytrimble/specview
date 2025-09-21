@@ -47,4 +47,4 @@ vimrc
 *.egg-info
 
 !.gitignore
-
+!.github
