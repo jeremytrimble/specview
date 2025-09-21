@@ -81,10 +81,6 @@ class WaterfallView(QWidget):
 
         self._annotation_rois: dict[str, AnnotationROI] = {}
 
-        # TODO: do we need these?
-        self._current_loadedfile_id: str|None = None
-        self._current_capture_idx: int|None = None
-
         self._current_capture_id: CaptureID|None = None
 
         self._connect_app_signals()
@@ -122,9 +118,6 @@ class WaterfallView(QWidget):
         app_state = self._get_app_state()
         loaded_capture_dict = app_state.get_capture_by_id(capture_id)
 
-        self._current_loadedfile_id = loaded_capture_dict.parent_loadedfile.file_id
-        self._current_capture_idx = loaded_capture_dict.capture_idx_in_file
-
         loaded_capture_dict.parent_loadedfile.file_id
         tser, sgram = app_state.load_capture_data(
             loaded_capture_dict.parent_loadedfile.file_id,
@@ -132,65 +125,85 @@ class WaterfallView(QWidget):
             channel_idx=0)   # TODO: handle multiple channels
         self.setDisplayedSpectrogramData(sgram)
 
+        # remove annotation rois related to old capture
+        self._clear_annotation_rois()
+
+        # create annotation rois for any annotations that overlap the new capture
+        for annotation_id in loaded_capture_dict.parent_loadedfile.get_annotations_dict().keys():
+            self._create_or_update_annotation_roi_for_annotation_id(annotation_id)
+
+    def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id:AnnotationID):
+        if self._current_capture_id is None:
+            log.debug(f"Skipping annotation {annotation_id=}, because no capture is selected")
+            return
+
+        ad: LoadedAnnotationDict = self._get_app_state().get_annotation_by_id(annotation_id)
+        if ad is None:
+            log.debug(f"Skipping annotation {annotation_id=} since it seems to have been removed/lost?")
+            return 
+        del annotation_id
+
+        freq_range_Hz = ad.get_frequency_range_Hz()
+        time_range_sec = ad.get_time_range_relative_to_capture(self._current_capture_id)
+
+        if time_range_sec is None:
+            log.debug(f"Skipping annotation {ad.annotation_id=} because it does not overlap current capture")
+            return
+
+        # TODO: get fields
+        log.debug(f"creating/updating ROI for annotation")
+
+        # TODO: is this a good way to display such an annotation?
+        if freq_range_Hz is None:
+            freq_range_Hz = self._sgram.freq_Hz.min, self._sgram.freq_Hz.max
+
+        freq_lo_Hz, freq_hi_Hz = freq_range_Hz
+        time_lo_sec, time_hi_sec = time_range_sec
+
+        print(f"{freq_lo_Hz=}, {freq_hi_Hz=}, {time_lo_sec=}, {time_hi_sec=}")
+
+        if ad.annotation_id not in self._annotation_rois:
+            lrroi = LabeledRectROI(
+                pos=(freq_lo_Hz, time_lo_sec),
+                size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
+                label_text_color=(255, 255, 255),
+                label_fill_color=INTERVAL_ROI_COLOR,
+            )
+            self._waterfall.addItem(lrroi)
+            aroi = AnnotationROI(ad.annotation_id, lrroi) 
+            self._annotation_rois[ad.annotation_id] = aroi
+        else:
+            aroi = self._annotation_rois[ad.annotation_id]
+            # TODO: batch these updates using update=False?
+            aroi.roi.setPos( pos=(freq_lo_Hz, time_lo_sec) )
+            aroi.roi.setSize( size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec) )
+
+        aroi.roi.setPen(self._roiPen)    # TODO: set this to a different color for annotations
+        aroi.roi.setVisible(True)
+        aroi.roi.setLabel(ad.label)
+
+    def _clear_annotation_rois(self):
+        for annotation_id in self._annotation_rois.keys():
+            self._remove_annotation_roi(annotation_id)
+
+    def _remove_annotation_roi(self, annotation_id:AnnotationID):
+        if annotation_id in self._annotation_rois:
+            ar: AnnotationROI = self._annotation_rois[annotation_id]
+            self._waterfall.removeItem(ar.roi)
+            del self._annotation_rois[annotation_id]
+
     def _on_annotation_changed(self, annotation_id:AnnotationID, action: LoadedDictAction):
-        app_state = self._get_app_state()
-        ad: LoadedAnnotationDict = app_state.get_annotation_by_id(annotation_id)
 
         log.debug("WaterfallView _on_annotation_changed")
         try:
-            if action == LoadedDictAction.MODIFIED:
-                if ad.annotation_id in self._annotation_rois:
-                    ar: AnnotationROI = self._annotation_rois[ad.annotation_id]
-
-                    # TODO: get fields
-                    f_lo_Hz = ad.get(sigmf.SigMFFile.FLO_KEY)
-
-                    ar.roi.setLabel(ad.label)
-            elif action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
-                if ad.annotation_id in self._annotation_rois:
-                    ar: AnnotationROI = self._annotation_rois[ad.annotation_id]
-                    self._waterfall.removeItem(ar.roi)
-                    del self._annotation_rois[ad.annotation_id]
-
-            elif action in (LoadedDictAction.ADDED, LoadedDictAction.LOADED):
+            if action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
+                self._remove_annotation_roi(annotation_id)
+            else:
                 # getting into trouble here:  we need to add the AnnotationROI
                 # but the time and freq ranges might not make sense yet (for the
                 # currently-selected capture)
+                self._create_or_update_annotation_roi_for_annotation_id(annotation_id)
 
-                # TODO: get fields
-                log.debug(f"creating ROI for annotation")
-
-                freq_range_Hz = ad.get_frequency_range_Hz()
-
-                if self._current_loadedfile_id is None or self._current_capture_idx is None:
-                    log.debug(f"Skipping annotation {ad.annotation_id=} because no capture is selected")
-                    return
-
-                # TODO: is this a good way to fetch the current capture index?
-                time_range_sec = ad.get_time_range_relative_to_capture(self._current_capture_idx)
-
-                if time_range_sec is None:
-                    log.debug(f"Skipping annotation {ad.annotation_id=} because it does not overlap current capture")
-                    return
-                if freq_range_Hz is None:
-                    freq_range_Hz = self._sgram.freq_Hz.min, self._sgram.freq_Hz.max
-
-                freq_lo_Hz, freq_hi_Hz = freq_range_Hz
-                time_lo_sec, time_hi_sec = time_range_sec
-
-                print(f"{freq_lo_Hz=}, {freq_hi_Hz=}, {time_lo_sec=}, {time_hi_sec=}")
-
-                roi = LabeledRectROI(
-                    pos=(freq_lo_Hz, time_lo_sec),
-                    size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
-                    label_text=ad.label,
-                    label_text_color=(255, 255, 255),
-                    label_fill_color=INTERVAL_ROI_COLOR,
-                )
-                roi.setPen(self._roiPen)    # TODO: set this to a different color for annotations
-                roi.setVisible(True)
-                self._waterfall.addItem(roi)
-                self._annotation_rois[ad.annotation_id] = AnnotationROI(ad.annotation_id, roi)
         except Exception as e:
             log.exception(f"Error in WaterfallView _on_annotation_changed: {e}")
 

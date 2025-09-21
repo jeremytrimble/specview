@@ -5,6 +5,7 @@ import time
 from contextlib import contextmanager
 #import typing
 #from functools import partial
+import typing
 
 from PyQt5.QtWidgets import QWidget
 
@@ -138,3 +139,11 @@ def region_from_rectroi(roi: pg.RectROI) -> tuple[float, float]:
 #def invoke_with_signals_blocked(widget:QWidget, cb:typing.Callable, *args, **kwargs):
 #    with signals_blocked(widget):
 #        cb(*args, **kwargs)
+
+Ktype = typing.TypeVar("Ktype")
+Vtype = typing.TypeVar("Vtype")
+def first_from_dict(d:dict[Ktype,Vtype], return_none_on_empty:bool=True) -> Vtype|None:
+    if not d and return_none_on_empty:
+        return None
+    key0 = list(d.keys())[0]
+    return d[key0]

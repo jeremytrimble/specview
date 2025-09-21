@@ -1,4 +1,4 @@
-from specview.app_state import get_annotation_time_bound_relative_to_current_capture
+from specview.sigmf_util import get_annotation_time_bound_relative_to_current_capture
 
 import sigmf
 from sigmf import SigMFFile

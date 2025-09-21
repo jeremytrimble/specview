@@ -59,8 +59,7 @@ class CapturesPanel(QWidget):
             loaded_file: LoadedFile
             file_item = QTreeWidgetItem([loaded_file.file_path.name])
             #file_item.open_file_id = loaded_file.file_id
-            captures = loaded_file._captures
-            for cap_idx, capture in enumerate(captures):
+            for capture in loaded_file._capture_id_to_capture.values():
                 #log.debug(f" populating for {capture}")
 
                 # TODO: present friendly units
@@ -70,8 +69,7 @@ class CapturesPanel(QWidget):
                 # TODO: compute length here
                 #duration_sec = capture[sigmf.SigMFFile.LENGTH_INDEX_KEY]
 
-                capture_item = QTreeWidgetItem([f"Capture {cap_idx:2d}", f"{freq_MHz:.2f} MHz"])
-                #capture_item.setText(0, f"Capture {cap_idx:02d}")
+                capture_item = QTreeWidgetItem([f"Capture {capture.capture_idx_in_file:02d}", f"{freq_MHz:.2f} MHz"])
                 capture_item.capture_id = capture.capture_id
                 file_item.addChild(capture_item)
             file_items.append(file_item)

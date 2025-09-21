@@ -4,6 +4,7 @@ import typing
 from pathlib import Path
 import enum
 import sigmf
+from .sigmf_util import get_annotation_time_bound_relative_to_current_capture
 
 import random
 rnd = random.Random(42)
@@ -195,12 +196,14 @@ class LoadedAnnotationDict(dict):
         else:
             return None
     
-    def get_time_range_relative_to_capture(self, capture_idx:int) -> tuple[float,float]|None:
-        return get_annotation_time_bound_relative_to_current_capture(self, capture_idx, self._parent_loadedfile.sigmf_file)
+    def get_time_range_relative_to_capture(self, capture_id:CaptureID) -> tuple[float,float]|None:
+        parent: LoadedFile = self._parent_loadedfile
+        capture = parent._capture_id_to_capture[capture_id]
+        return get_annotation_time_bound_relative_to_current_capture(self, capture.capture_idx_in_file, parent.sigmf_file)
 
     @property
     def label(self) -> str:
-        label = self.get("label")
+        label = self.get(sigmf.SigMFFile.LABEL_KEY)
         if label is None:
             return ""
         else:
@@ -224,14 +227,13 @@ class LoadedFile:
         self._file_path: Path = Path(self._sigmf_file.data_file)  # This is the path to the .sigmf-data file
         self._file_id: FileID = loaded_file_counter.get_next_id()
 
-        self._capture_id_to_capture: dict[CaptureID, LoadedAnnotationDict] = {}
+        self._capture_id_to_capture: dict[CaptureID, LoadedCaptureDict] = {}
         self._annotation_id_to_annotation: dict[AnnotationID, LoadedAnnotationDict] = {}
 
-        self._captures: list[LoadedCaptureDict] = []
         for cap_idx, cap_dict in enumerate(self._sigmf_file.get_captures()):
             capture_id = self._get_next_capture_id()
             lcd = LoadedCaptureDict.create_capture_dict(parent_loadedfile=self, capture_idx=cap_idx, capture_id=capture_id, capture_content=cap_dict)
-            self._captures.append(lcd)
+            self._capture_id_to_capture[capture_id] = lcd
             self._parent_loaded_files._capture_id_to_capture[capture_id] = lcd  # store in the global mapping
 
         for annotation_dict in self._sigmf_file.get_annotations():
@@ -343,8 +345,9 @@ class LoadedFile:
     def close(self) -> None:
         self._close_annotations()
         self._sigmf_file = None
-        for cap in self._captures:
+        for cap in self._capture_id_to_capture.values():
             del self._parent_loaded_files._capture_id_to_capture[cap.capture_id]
+        self._capture_id_to_capture.clear()
 
 class LoadedCaptureDict(dict):
     @classmethod
