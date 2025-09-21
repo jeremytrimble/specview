@@ -1,8 +1,10 @@
-from specview.app_state import LoadedFile, LoadedCaptureDict, LoadedAnnotationDict, LoadedDictAction, FileID, CaptureID, AnnotationID, LoadedFilesCollection, LoadedFileAction
 from sigmf import SigMFFile
 import numpy as np
 from pathlib import Path
 import sigmf
+
+from specview.loaded_file_mgmt import LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID
+
 
 def generate_example_sigmffile(tmpdir) -> Path:
 

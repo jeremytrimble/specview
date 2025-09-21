@@ -3,10 +3,11 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSl
 import pyqtgraph as pg
 import dataclasses
 
+from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
 from specview.util import region_from_rectroi
 
 from .spec_types import Spectrogram
-from .app_state import AppState, LoadedDictAction, LoadedAnnotationDict, AnnotationID, CaptureID
+from .app_state import AppState
 
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import RectSelectViewBox

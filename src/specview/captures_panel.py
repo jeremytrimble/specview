@@ -1,6 +1,8 @@
 from PyQt5.QtWidgets import QTreeView, QTreeWidgetItem, QVBoxLayout, QWidget, QTreeWidget, QApplication, QAbstractItemView
 
-from .app_state import AppState, LoadedFile 
+from .loaded_file_mgmt import LoadedFile
+
+from .app_state import AppState 
 
 import sigmf
 import logging

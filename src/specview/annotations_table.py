@@ -1,7 +1,9 @@
 from PyQt5.QtCore import QAbstractTableModel, Qt
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout
 
-from .app_state import AppState, LoadedDictAction, AnnotationID, CaptureID
+from .loaded_file_mgmt import LoadedDictAction, AnnotationID, CaptureID
+
+from .app_state import AppState
 import sigmf
 from .util import duration_format, freq_format
 
