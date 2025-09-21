@@ -4,7 +4,7 @@ import pyqtgraph as pg
 import numpy as np
 
 from .spec_types import TimeSeries
-from .app_state import AppState
+from .app_state import AppState, CaptureID, AnnotationID
 
 from .roi_select_viewboxes import IntervalSelectViewBox
 
@@ -65,9 +65,13 @@ class TimeView(QWidget):
         # TODO: process selected channel changes
         #app_state.selected_channel_changed.connect(self._on_selected_channel_changed)
 
-    def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
+    def _on_selected_capture_changed(self, capture_id: CaptureID):
         app_state = self._get_app_state()
-        tser, sgram = app_state.load_capture_data(fileid, cap_idx, channel_idx=0)   # TODO: handle multiple channels
+        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
+        tser, sgram = app_state.load_capture_data(
+            loaded_capture_dict.parent_loadedfile.file_id,
+            loaded_capture_dict.capture_idx_in_file,
+            channel_idx=0)   # TODO: handle multiple channels
         self.setDisplayedTimeSeries(tser)
 
     def _on_time_cursor_changed(self, t_sec:float):

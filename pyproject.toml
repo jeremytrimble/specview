@@ -20,8 +20,16 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "mypy>=1.18.2",
+    "pytest-cov>=7.0.0",
     "specview",
 ]
 
 [tool.uv.sources]
 specview = { workspace = true }
+
+[tool.pytest.ini_options]
+addopts = "--cov=src/specview --cov-report=term --cov-report=html"
+testpaths = [
+    "tests"
+]

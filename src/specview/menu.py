@@ -21,24 +21,24 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
         app_state: AppState = QApplication.instance().app_state
         app_state.save_current_file()
 
-    def do_save_as():
-        app_state: AppState = QApplication.instance().app_state
-        app_state.save_as(parent)
+    #def do_save_as():
+    #    app_state: AppState = QApplication.instance().app_state
+    #    app_state.save_as(parent)
 
     save_action = QAction(text="Save", parent=parent)
     save_action.setShortcut("Ctrl+S")
     save_action.triggered.connect(do_save)
 
-    save_as_action = QAction(text="Save As...", parent=parent)
-    save_as_action.setShortcut("Ctrl+Shift+S")
-    save_as_action.triggered.connect(do_save_as)
+    #save_as_action = QAction(text="Save As...", parent=parent)
+    #save_as_action.setShortcut("Ctrl+Shift+S")
+    #save_as_action.triggered.connect(do_save_as)
 
     # TODO: make the menu do the real things I want
     file_menu = QMenu("&File", menu_bar)
     #file_menu.addAction("&Open", lambda: present_open_file_dialog(parent))
     file_menu.addAction(open_action)
     file_menu.addAction(save_action)
-    file_menu.addAction(save_as_action)
+    #file_menu.addAction(save_as_action)
     #file_menu.addSeparator()
     #file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
 

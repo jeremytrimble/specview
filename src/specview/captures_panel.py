@@ -36,14 +36,13 @@ class CapturesPanel(QWidget):
         if selected is None:
             return
 
-        parent = selected.parent()
-        if parent is None:
-            return
-        idx = parent.indexOfChild(selected)
-        fileid = parent.open_file_id
+        #parent = selected.parent()
+        #if parent is None:
+        #    return
+        #idx = parent.indexOfChild(selected)
 
         app_state = self._get_app_state()
-        app_state.set_selected_capture(fileid, idx)
+        app_state.set_selected_capture(capture_id=selected.capture_id)
 
     def populate_tree(self):
         app_state = self._get_app_state()
@@ -57,11 +56,9 @@ class CapturesPanel(QWidget):
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
             file_item = QTreeWidgetItem([loaded_file.file_path.name])
-            file_item.open_file_id = loaded_file._open_file_id
-            #file_item.setData(0, 1, loaded_file.open_file_id)
-            #file_item.setData(0, 0, loaded_file.file_path.name)
-            smf = loaded_file.sigmf_file
-            for cap_idx, capture in enumerate(smf.get_captures()):
+            #file_item.open_file_id = loaded_file.file_id
+            captures = loaded_file._captures
+            for cap_idx, capture in enumerate(captures):
                 #log.debug(f" populating for {capture}")
 
                 # TODO: present friendly units
@@ -73,6 +70,7 @@ class CapturesPanel(QWidget):
 
                 capture_item = QTreeWidgetItem([f"Capture {cap_idx:2d}", f"{freq_MHz:.2f} MHz"])
                 #capture_item.setText(0, f"Capture {cap_idx:02d}")
+                capture_item.capture_id = capture.capture_id
                 file_item.addChild(capture_item)
             file_items.append(file_item)
 

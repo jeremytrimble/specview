@@ -1,7 +1,7 @@
 from PyQt5.QtCore import QAbstractTableModel, Qt
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout
 
-from .app_state import AppState, LoadedAnnotationDictAction
+from .app_state import AppState, LoadedDictAction, AnnotationID, CaptureID
 import sigmf
 from .util import duration_format, freq_format
 
@@ -30,9 +30,14 @@ class AnnotationsModel(QAbstractTableModel):
     def _connect_app_signals(self):
         app_state = self._get_app_state()
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
-        app_state.annotation_changed.connect(self._on_annotations_changed)
+        app_state.annotation_changed.connect(self._on_annotation_changed)
 
-    def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
+    def _on_selected_capture_changed(self, capture_id: CaptureID):
+
+        app_state = self._get_app_state()
+        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
+        fileid = loaded_capture_dict.parent_loadedfile.file_id
+
         self._current_capture_fileid = fileid
 
         # layoutChanged indicates that the SHAPE of the model has changed,
@@ -40,14 +45,10 @@ class AnnotationsModel(QAbstractTableModel):
         # but the shape remains the same
         self.layoutChanged.emit() 
 
-    def _on_annotations_changed(self, fileid: str, annotation_id:str, action: LoadedAnnotationDictAction):
-        if fileid != self._current_capture_fileid:
-            ## TODO: not sure if this is the right thing to do here.
-            return
-
-        if action == LoadedAnnotationDictAction.ADDED or action == LoadedAnnotationDictAction.DELETED:
+    def _on_annotation_changed(self, annotation_id:AnnotationID, action: LoadedDictAction):
+        if action == LoadedDictAction.ADDED or action == LoadedDictAction.DELETED:
             self.layoutChanged.emit()
-        elif action == LoadedAnnotationDictAction.MODIFIED:
+        elif action == LoadedDictAction.MODIFIED:
             self.dataChanged.emit()
 
     def _get_current_capture_annotations(self):

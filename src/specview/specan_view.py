@@ -13,7 +13,7 @@ from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import IntervalSelectViewBox
 
 from .spec_types import Spectrogram
-from .app_state import AppState
+from .app_state import AppState, CaptureID
 
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -66,10 +66,15 @@ class SpecanView(QWidget):
         app_state.frequency_interval_changed.connect(self._on_freq_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
 
-    def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
+    def _on_selected_capture_changed(self, capture_id: CaptureID):
         app_state = self._get_app_state()
-        tser, sgram = app_state.load_capture_data(fileid, cap_idx, channel_idx=0)   # TODO: handle multiple channels
+        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
+        tser, sgram = app_state.load_capture_data(
+            loaded_capture_dict.parent_loadedfile.file_id,
+            loaded_capture_dict.capture_idx_in_file,
+            channel_idx=0)   # TODO: handle multiple channels
         self.setDisplayedSpectrogramData(sgram)
+
 
     def _freq_interval_set_from_specan(self, freq_interval: tuple[float,float]|None):
         self._get_app_state().set_frequency_interval(freq_interval)

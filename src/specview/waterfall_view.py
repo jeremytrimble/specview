@@ -1,14 +1,29 @@
 from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 import pyqtgraph as pg
+import dataclasses
 
 from specview.util import region_from_rectroi
 
 from .spec_types import Spectrogram
-from .app_state import AppState
+from .app_state import AppState, LoadedDictAction, LoadedAnnotationDict, AnnotationID, CaptureID
 
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import RectSelectViewBox
+
+from .labeled_rect_roi import LabeledRectROI
+import sigmf
+
+import logging
+log = logging.getLogger(__name__)
+
+@dataclasses.dataclass
+class AnnotationROI:
+    annotation_id: AnnotationID
+    roi: LabeledRectROI
+    def update_roi_relative_to_current_capture(self, wfall:"WaterfallView", selected_file_id:str, selected_capture_idx:int):
+        app_state: AppState  = QApplication.instance().app_state
+        ad: LoadedAnnotationDict = app_state.get_annotation_by_id(selected_file_id, self.annotation_id)
 
 class WaterfallView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -44,7 +59,8 @@ class WaterfallView(QWidget):
         self._waterfall.addItem(self._time_crosshair_y, ignoreBounds=True)
 
         self._roiPen = pg.mkPen(INTERVAL_ROI_COLOR, width=3)
-        roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
+        #roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
+        roi = LabeledRectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False, label_text="Waterfall ROI", label_text_color=(255,255,255), label_fill_color=INTERVAL_ROI_COLOR)
         roi.setPen(self._roiPen)
         roi.setVisible(False) # Initially hidden
 
@@ -62,11 +78,18 @@ class WaterfallView(QWidget):
 
         self.setLayout(waterfall_layout)
 
+        self._annotation_rois: dict[str, AnnotationROI] = {}
+
+        # TODO: do we need these?
+        self._current_loadedfile_id: str|None = None
+        self._current_capture_idx: int|None = None
+
+        self._current_capture_id: CaptureID|None = None
+
         self._connect_app_signals()
 
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
-
 
     def _waterfall_roi_set(self, region: tuple[float, float] | None):
         #print(f"{region=}")
@@ -88,10 +111,88 @@ class WaterfallView(QWidget):
         app_state.frequency_interval_changed.connect(self._on_interval_changed)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
 
-    def _on_selected_capture_changed(self, fileid: str, cap_idx: int):
+        app_state.annotation_changed.connect(self._on_annotation_changed)
+        print("WaterfallView connected to app_state.annotation_changed")
+
+    def _on_selected_capture_changed(self, capture_id: CaptureID):
+
+        self._current_capture_id = capture_id
+        
         app_state = self._get_app_state()
-        tser, sgram = app_state.load_capture_data(fileid, cap_idx, channel_idx=0)   # TODO: handle multiple channels
+        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
+
+        self._current_loadedfile_id = loaded_capture_dict.parent_loadedfile.file_id
+        self._current_capture_idx = loaded_capture_dict.capture_idx_in_file
+
+        loaded_capture_dict.parent_loadedfile.file_id
+        tser, sgram = app_state.load_capture_data(
+            loaded_capture_dict.parent_loadedfile.file_id,
+            loaded_capture_dict.capture_idx_in_file,
+            channel_idx=0)   # TODO: handle multiple channels
         self.setDisplayedSpectrogramData(sgram)
+
+    def _on_annotation_changed(self, annotation_id:AnnotationID, action: LoadedDictAction):
+        app_state = self._get_app_state()
+        ad: LoadedAnnotationDict = app_state.get_annotation_by_id(annotation_id)
+
+        log.debug("WaterfallView _on_annotation_changed")
+        try:
+            if action == LoadedDictAction.MODIFIED:
+                if ad.annotation_id in self._annotation_rois:
+                    ar: AnnotationROI = self._annotation_rois[ad.annotation_id]
+
+                    # TODO: get fields
+                    f_lo_Hz = ad.get(sigmf.SigMFFile.FLO_KEY)
+
+                    ar.roi.setLabel(ad.label)
+            elif action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
+                if ad.annotation_id in self._annotation_rois:
+                    ar: AnnotationROI = self._annotation_rois[ad.annotation_id]
+                    self._waterfall.removeItem(ar.roi)
+                    del self._annotation_rois[ad.annotation_id]
+
+            elif action in (LoadedDictAction.ADDED, LoadedDictAction.LOADED):
+                # getting into trouble here:  we need to add the AnnotationROI
+                # but the time and freq ranges might not make sense yet (for the
+                # currently-selected capture)
+
+                # TODO: get fields
+                log.debug(f"creating ROI for annotation")
+
+                freq_range_Hz = ad.get_frequency_range_Hz()
+
+                if self._current_loadedfile_id is None or self._current_capture_idx is None:
+                    log.debug(f"Skipping annotation {ad.annotation_id=} because no capture is selected")
+                    return
+
+                # TODO: is this a good way to fetch the current capture index?
+                time_range_sec = ad.get_time_range_relative_to_capture(self._current_capture_idx)
+
+                if time_range_sec is None:
+                    log.debug(f"Skipping annotation {ad.annotation_id=} because it does not overlap current capture")
+                    return
+                if freq_range_Hz is None:
+                    freq_range_Hz = self._sgram.freq_Hz.min, self._sgram.freq_Hz.max
+
+                freq_lo_Hz, freq_hi_Hz = freq_range_Hz
+                time_lo_sec, time_hi_sec = time_range_sec
+
+                print(f"{freq_lo_Hz=}, {freq_hi_Hz=}, {time_lo_sec=}, {time_hi_sec=}")
+
+                roi = LabeledRectROI(
+                    pos=(freq_lo_Hz, time_lo_sec),
+                    size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
+                    label_text=ad.label,
+                    label_text_color=(255, 255, 255),
+                    label_fill_color=INTERVAL_ROI_COLOR,
+                )
+                roi.setPen(self._roiPen)    # TODO: set this to a different color for annotations
+                roi.setVisible(True)
+                self._waterfall.addItem(roi)
+                self._annotation_rois[ad.annotation_id] = AnnotationROI(ad.annotation_id, roi)
+        except Exception as e:
+            log.exception(f"Error in WaterfallView _on_annotation_changed: {e}")
+
 
     def _on_interval_changed(self):
         app_state = self._get_app_state()
