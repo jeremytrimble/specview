@@ -8,7 +8,8 @@ from .labeled_rect_roi import LabeledRectROI
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
 from .app_state import AppState
-from .ui_constants import INTERVAL_ROI_COLOR
+from .ui_constants import ANNOTATION_ROI_COLOR
+import enum
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +21,11 @@ class AnnotationROI(Generic[ROIType]):
     annotation_id: AnnotationID
     roi: ROIType
 
+class ROIDimensions(enum.IntEnum):
+    TIME = 1
+    FREQUENCY = 2
+    TIME_AND_FREQUENCY = 3
+
 class AnnotationROIManager(Generic[ROIType]):
     """
     A class to manage annotation ROIs across different views (Waterfall, Time, Spectrum).
@@ -27,7 +33,7 @@ class AnnotationROIManager(Generic[ROIType]):
     representation as ROIs.
     """
     
-    def __init__(self, plot_widget: pg.PlotWidget, roi_factory, is_rectangular: bool = False):
+    def __init__(self, plot_widget: pg.PlotWidget, roi_dimensions:ROIDimensions):
         """
         Initialize the annotation ROI manager.
         
@@ -37,11 +43,19 @@ class AnnotationROIManager(Generic[ROIType]):
             is_rectangular: True if using rectangular ROIs, False for linear ROIs
         """
         self._plot_widget = plot_widget
-        self._roi_factory = roi_factory
-        self._is_rectangular = is_rectangular
-        self._annotation_rois: Dict[str, AnnotationROI] = {}
+
+        self._roi_dimensions = roi_dimensions
+
+        if self._roi_dimensions in (ROIDimensions.FREQUENCY, ROIDimensions.TIME):
+            self._roi_factory = LabeledLinearRegionItem
+        elif self._roi_dimensions == ROIDimensions.TIME_AND_FREQUENCY:
+            self._roi_factory = LabeledRectROI
+        else:
+            raise ValueError(f"Unsupported ROI dimension type: {self._roi_dimensions}")
+
+        self._annotation_rois: Dict[str, AnnotationROI[ROIType]] = {}
         self._current_capture_id: CaptureID = None
-        self._roiPen = pg.mkPen(INTERVAL_ROI_COLOR, width=3)
+        self._roiPen = pg.mkPen(ANNOTATION_ROI_COLOR, width=3)
         
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
@@ -86,7 +100,7 @@ class AnnotationROIManager(Generic[ROIType]):
             log.debug(f"Skipping annotation {ad.annotation_id=} because it does not overlap current capture")
             return
 
-        if self._is_rectangular:
+        if self._roi_dimensions == ROIDimensions.TIME_AND_FREQUENCY:
             # Handle rectangular ROI (Waterfall view)
             if freq_range_Hz is None:
                 freq_range_Hz = (0, 1)  # This should be replaced with actual frequency range
@@ -99,7 +113,7 @@ class AnnotationROIManager(Generic[ROIType]):
                     pos=(freq_lo_Hz, time_lo_sec),
                     size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
                     label_text_color=(255, 255, 255),
-                    label_fill_color=INTERVAL_ROI_COLOR,
+                    label_fill_color=ANNOTATION_ROI_COLOR,
                 )
                 self._plot_widget.addItem(roi)
                 aroi = AnnotationROI(ad.annotation_id, roi)
@@ -108,21 +122,23 @@ class AnnotationROIManager(Generic[ROIType]):
                 aroi = self._annotation_rois[ad.annotation_id]
                 aroi.roi.setPos(pos=(freq_lo_Hz, time_lo_sec))
                 aroi.roi.setSize(size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec))
-        else:
+        else: # TIME or FREQUENCY
             # Handle linear ROI (Time or Spectrum view)
-            if self._is_frequency_view:
+            if self._roi_dimensions == ROIDimensions.FREQUENCY:
                 if freq_range_Hz is None:
                     return
                 region = freq_range_Hz
-            else:
+            elif self._roi_dimensions == ROIDimensions.TIME:
                 region = time_range_sec
+            else:
+                raise ValueError(f"Unsupported ROI dimension type: {self._roi_dimensions}")
 
             if ad.annotation_id not in self._annotation_rois:
                 roi = self._roi_factory(
                     values=region,
                     label_text=ad.label,
                     label_text_color=(255, 255, 255),
-                    label_fill_color=INTERVAL_ROI_COLOR,
+                    label_fill_color=ANNOTATION_ROI_COLOR,
                 )
                 self._plot_widget.addItem(roi)
                 aroi = AnnotationROI(ad.annotation_id, roi)
@@ -131,7 +147,8 @@ class AnnotationROIManager(Generic[ROIType]):
                 aroi = self._annotation_rois[ad.annotation_id]
                 aroi.roi.setRegion(region)
 
-        aroi.roi.setPen(self._roiPen)
+        # TODO: set colors appropriately
+        #aroi.roi.setPen(self._roiPen)
         aroi.roi.setVisible(True)
         aroi.roi.setLabel(ad.label)
 

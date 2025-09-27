@@ -9,7 +9,7 @@ from .loaded_file_mgmt import LoadedDictAction
 from .roi_select_viewboxes import IntervalSelectViewBox
 from .ui_constants import INTERVAL_ROI_COLOR
 from .labeled_linear_region_item import LabeledLinearRegionItem
-from .annotation_roi_manager import AnnotationROIManager
+from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 
 class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -56,8 +56,7 @@ class TimeView(QWidget):
         
         self._annotation_manager = AnnotationROIManager(
             plot_widget=self._time_plot,
-            roi_factory=roi_factory,
-            is_rectangular=False
+            roi_dimensions=ROIDimensions.TIME,
         )
 
         self._connect_app_signals()

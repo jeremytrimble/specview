@@ -12,7 +12,7 @@ from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import RectSelectViewBox
 
 from .labeled_rect_roi import LabeledRectROI
-from .annotation_roi_manager import AnnotationROIManager
+from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 
 import logging
 log = logging.getLogger(__name__)
@@ -76,8 +76,7 @@ class WaterfallView(QWidget):
         
         self._annotation_manager = AnnotationROIManager(
             plot_widget=self._waterfall,
-            roi_factory=roi_factory,
-            is_rectangular=True
+            roi_dimensions=ROIDimensions.TIME_AND_FREQUENCY,
         )
 
         self._current_capture_id: CaptureID|None = None

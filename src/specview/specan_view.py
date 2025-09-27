@@ -6,7 +6,7 @@ import pyqtgraph as pg
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import IntervalSelectViewBox
 from .labeled_linear_region_item import LabeledLinearRegionItem
-from .annotation_roi_manager import AnnotationROIManager
+from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 from .spec_types import Spectrogram
 from .app_state import AppState, CaptureID, AnnotationID
 from .loaded_file_mgmt import LoadedDictAction
@@ -55,8 +55,7 @@ class SpecanView(QWidget):
         
         self._annotation_manager = AnnotationROIManager(
             plot_widget=self._freq_plot,
-            roi_factory=roi_factory,
-            is_rectangular=False
+            roi_dimensions=ROIDimensions.FREQUENCY,
         )
 
         self._connect_app_signals()
@@ -85,7 +84,6 @@ class SpecanView(QWidget):
 
     def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
         self._annotation_manager.on_annotation_changed(annotation_id, action)
-
 
     def _freq_interval_set_from_specan(self, freq_interval: tuple[float,float]|None):
         self._get_app_state().set_frequency_interval(freq_interval)
