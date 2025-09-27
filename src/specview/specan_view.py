@@ -1,19 +1,15 @@
 from PyQt5.QtCore import QPointF
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel,
-    QHBoxLayout, QVBoxLayout, QPushButton, QComboBox,
-)
-
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
 import numpy as np
-
 import pyqtgraph as pg
 
 from .ui_constants import INTERVAL_ROI_COLOR
-
 from .roi_select_viewboxes import IntervalSelectViewBox
-
+from .labeled_linear_region_item import LabeledLinearRegionItem
+from .annotation_roi_manager import AnnotationROIManager
 from .spec_types import Spectrogram
-from .app_state import AppState, CaptureID
+from .app_state import AppState, CaptureID, AnnotationID
+from .loaded_file_mgmt import LoadedDictAction
 
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -53,6 +49,16 @@ class SpecanView(QWidget):
         # make sure the interval ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
         self._interval_roi.sigRegionChanged.connect( lambda: self._freq_interval_set_from_specan(self._interval_roi.getRegion()) )
 
+        # Initialize the annotation ROI manager for linear ROIs in frequency domain
+        def roi_factory(**kwargs):
+            return LabeledLinearRegionItem(orientation="vertical", pen=roiPen, **kwargs)
+        
+        self._annotation_manager = AnnotationROIManager(
+            plot_widget=self._freq_plot,
+            roi_factory=roi_factory,
+            is_rectangular=False
+        )
+
         self._connect_app_signals()
 
     def _get_app_state(self) -> AppState:
@@ -65,6 +71,7 @@ class SpecanView(QWidget):
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
         app_state.frequency_interval_changed.connect(self._on_freq_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
+        app_state.annotation_changed.connect(self._on_annotation_changed)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
         app_state = self._get_app_state()
@@ -74,6 +81,10 @@ class SpecanView(QWidget):
             loaded_capture_dict.capture_idx_in_file,
             channel_idx=0)   # TODO: handle multiple channels
         self.setDisplayedSpectrogramData(sgram)
+        self._annotation_manager.set_current_capture(capture_id)
+
+    def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
+        self._annotation_manager.on_annotation_changed(annotation_id, action)
 
 
     def _freq_interval_set_from_specan(self, freq_interval: tuple[float,float]|None):

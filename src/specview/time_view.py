@@ -1,14 +1,15 @@
 from PyQt5.QtCore import QPointF
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
+from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
 import pyqtgraph as pg
 import numpy as np
 
 from .spec_types import TimeSeries
 from .app_state import AppState, CaptureID, AnnotationID
-
+from .loaded_file_mgmt import LoadedDictAction
 from .roi_select_viewboxes import IntervalSelectViewBox
-
 from .ui_constants import INTERVAL_ROI_COLOR
+from .labeled_linear_region_item import LabeledLinearRegionItem
+from .annotation_roi_manager import AnnotationROIManager
 
 class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -49,6 +50,16 @@ class TimeView(QWidget):
         # make sure the interval ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
         self._interval_roi.sigRegionChanged.connect( lambda: self._time_interval_set(self._interval_roi.getRegion()) )
 
+        # Initialize the annotation ROI manager for linear ROIs
+        def roi_factory(**kwargs):
+            return LabeledLinearRegionItem(orientation="vertical", pen=roiPen, **kwargs)
+        
+        self._annotation_manager = AnnotationROIManager(
+            plot_widget=self._time_plot,
+            roi_factory=roi_factory,
+            is_rectangular=False
+        )
+
         self._connect_app_signals()
 
     def _get_app_state(self) -> AppState:
@@ -62,6 +73,7 @@ class TimeView(QWidget):
         app_state.cursor_time_changed.connect(self._on_time_cursor_changed)
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
+        app_state.annotation_changed.connect(self._on_annotation_changed)
         # TODO: process selected channel changes
         #app_state.selected_channel_changed.connect(self._on_selected_channel_changed)
 
@@ -73,6 +85,10 @@ class TimeView(QWidget):
             loaded_capture_dict.capture_idx_in_file,
             channel_idx=0)   # TODO: handle multiple channels
         self.setDisplayedTimeSeries(tser)
+        self._annotation_manager.set_current_capture(capture_id)
+
+    def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
+        self._annotation_manager.on_annotation_changed(annotation_id, action)
 
     def _on_time_cursor_changed(self, t_sec:float):
         self._time_crosshair_x.setPos(t_sec)
