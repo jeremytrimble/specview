@@ -4,7 +4,7 @@ import pyqtgraph as pg
 import dataclasses
 
 from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
-from specview.util import region_from_rectroi
+from specview.util import region_from_rectroi, signals_blocked
 
 from .spec_types import Spectrogram
 from .app_state import AppState
@@ -172,11 +172,17 @@ class WaterfallView(QWidget):
             self._waterfall.addItem(lrroi)
             aroi = AnnotationROI(ad.annotation_id, lrroi) 
             self._annotation_rois[ad.annotation_id] = aroi
+            
+            # Connect the ROI's sigRegionChanged signal to update the annotation
+            lrroi.sigRegionChanged.connect(
+                lambda roi=lrroi, ann_id=ad.annotation_id: self._on_annotation_roi_changed(ann_id, roi)
+            )
         else:
             aroi = self._annotation_rois[ad.annotation_id]
-            # TODO: batch these updates using update=False?
-            aroi.roi.setPos( pos=(freq_lo_Hz, time_lo_sec) )
-            aroi.roi.setSize( size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec) )
+            # Block signals during programmatic updates to prevent infinite loops
+            with signals_blocked(aroi.roi):
+                aroi.roi.setPos( pos=(freq_lo_Hz, time_lo_sec) )
+                aroi.roi.setSize( size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec) )
 
         aroi.roi.setPen(self._roiPen)    # TODO: set this to a different color for annotations
         aroi.roi.setVisible(True)
@@ -206,6 +212,43 @@ class WaterfallView(QWidget):
 
         except Exception as e:
             log.exception(f"Error in WaterfallView _on_annotation_changed: {e}")
+
+    def _on_annotation_roi_changed(self, annotation_id: AnnotationID, roi: LabeledRectROI):
+        """
+        Called when an annotation ROI is moved or resized by the user.
+        Updates the underlying LoadedAnnotationDict with the new time and frequency ranges.
+        """
+        try:
+            if self._current_capture_id is None:
+                log.warning(f"Annotation ROI changed but no capture is selected")
+                return
+            
+            # Get the annotation
+            ad: LoadedAnnotationDict = self._get_app_state().get_annotation_by_id(annotation_id)
+            if ad is None:
+                log.warning(f"Annotation ROI changed but annotation {annotation_id} not found")
+                return
+            
+            # Get ROI position and size
+            left, top, right, bottom = region_from_rectroi(roi)
+            
+            # Update frequency range (x-axis in the waterfall)
+            freq_lo_Hz = left
+            freq_hi_Hz = right
+            ad.update_frequency_range_Hz(freq_lo_Hz, freq_hi_Hz)
+            
+            # Update time range (y-axis in the waterfall)
+            time_lo_sec = top
+            time_hi_sec = bottom
+            ad.update_time_range_relative_to_capture(self._current_capture_id, time_lo_sec, time_hi_sec)
+            
+            log.debug(f"Updated annotation {annotation_id}: freq=[{freq_lo_Hz:.2f}, {freq_hi_Hz:.2f}] Hz, time=[{time_lo_sec:.4f}, {time_hi_sec:.4f}] sec")
+            
+            # Note: The annotation_changed signal is automatically emitted by LoadedAnnotationDict
+            # when we update its fields, which will propagate changes to other views
+            
+        except Exception as e:
+            log.exception(f"Error in _on_annotation_roi_changed: {e}")
 
 
     def _on_interval_changed(self):

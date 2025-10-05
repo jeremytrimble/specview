@@ -208,6 +208,46 @@ class LoadedAnnotationDict(dict):
             return ""
         else:
             return str(label)
+    
+    def update_frequency_range_Hz(self, freq_lo_Hz: float, freq_hi_Hz: float) -> None:
+        """
+        Update the frequency range of this annotation.
+        
+        Args:
+            freq_lo_Hz: Lower frequency edge in Hz
+            freq_hi_Hz: Upper frequency edge in Hz
+        """
+        self[sigmf.SigMFFile.FLO_KEY] = float(freq_lo_Hz)
+        self[sigmf.SigMFFile.FHI_KEY] = float(freq_hi_Hz)
+    
+    def update_time_range_relative_to_capture(self, capture_id: CaptureID, time_lo_sec: float, time_hi_sec: float) -> None:
+        """
+        Update the time range of this annotation relative to a capture.
+        
+        Args:
+            capture_id: The capture ID to use for calculating the sample indices
+            time_lo_sec: Start time in seconds relative to capture start
+            time_hi_sec: End time in seconds relative to capture start
+        """
+        parent: LoadedFile = self._parent_loadedfile
+        capture = parent._capture_id_to_capture[capture_id]
+        
+        # Get sample rate
+        sample_rate_Hz = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate_Hz is None:
+            raise ValueError("Global SAMPLE_RATE_KEY not found in SigMF file.")
+        
+        # Get capture start index
+        capture_dict = parent.sigmf_file.get_captures()[capture.capture_idx_in_file]
+        capture_start_idx = capture_dict[sigmf.SigMFFile.START_INDEX_KEY]
+        
+        # Convert time to sample indices
+        start_sample_offset = int(time_lo_sec * sample_rate_Hz)
+        length_samples = int((time_hi_sec - time_lo_sec) * sample_rate_Hz)
+        
+        # Update annotation fields
+        self[sigmf.SigMFFile.START_INDEX_KEY] = capture_start_idx + start_sample_offset
+        self[sigmf.SigMFFile.LENGTH_INDEX_KEY] = length_samples
 
 
 class LoadedFile:
