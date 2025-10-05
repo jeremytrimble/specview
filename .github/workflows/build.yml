@@ -32,7 +32,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
-          uv run pyinstaller --onefile main.py
+          uv run pyinstaller --onefile  src/specview/main.py
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
