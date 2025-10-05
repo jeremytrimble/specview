@@ -46,5 +46,10 @@ vimrc
 
 *.egg-info
 
+# PyInstaller
+dist/
+build/
+*.spec.bak
+
 !.gitignore
 !.github
