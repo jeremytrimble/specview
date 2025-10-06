@@ -240,6 +240,216 @@ class LoadedAnnotationDict(dict):
         else:
             return str(label)
 
+    # Time-related getters and setters (methods since they require capture_id parameter)
+    def get_start_time_sec(self, capture_id: CaptureID) -> float | None:
+        """
+        Get the start time in seconds since the beginning of the specified capture.
+        
+        Args:
+            capture_id: The ID of the capture to use as the time reference
+            
+        Returns:
+            Start time in seconds, or None if the annotation is not in the capture
+        """
+        time_range = self.get_time_range_relative_to_capture(capture_id)
+        if time_range is None:
+            return None
+        return time_range[0]
+    
+    def set_start_time_sec(self, capture_id: CaptureID, start_time_sec: float) -> None:
+        """
+        Set the start time in seconds since the beginning of the specified capture.
+        This updates the START_INDEX_KEY in the annotation dictionary.
+        
+        Args:
+            capture_id: The ID of the capture to use as the time reference
+            start_time_sec: The start time in seconds
+        """
+        parent: LoadedFile = self._parent_loadedfile
+        capture = parent._capture_id_to_capture[capture_id]
+        
+        # Get sample rate
+        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate is None or sample_rate <= 0:
+            raise ValueError("Invalid or missing sample rate in parent file")
+        
+        # Convert time to sample index
+        start_sample_in_capture = int(start_time_sec * sample_rate)
+        start_index = capture.start_sample_idx + start_sample_in_capture
+        
+        # Update the dictionary (this will trigger notification)
+        self[sigmf.SigMFFile.START_INDEX_KEY] = start_index
+    
+    def get_end_time_sec(self, capture_id: CaptureID) -> float | None:
+        """
+        Get the end time in seconds since the beginning of the specified capture.
+        
+        Args:
+            capture_id: The ID of the capture to use as the time reference
+            
+        Returns:
+            End time in seconds, or None if the annotation is not in the capture
+        """
+        time_range = self.get_time_range_relative_to_capture(capture_id)
+        if time_range is None:
+            return None
+        return time_range[1]
+    
+    def set_end_time_sec(self, capture_id: CaptureID, end_time_sec: float) -> None:
+        """
+        Set the end time in seconds since the beginning of the specified capture.
+        This updates the LENGTH_INDEX_KEY in the annotation dictionary.
+        
+        Args:
+            capture_id: The ID of the capture to use as the time reference
+            end_time_sec: The end time in seconds
+        """
+        parent: LoadedFile = self._parent_loadedfile
+        capture = parent._capture_id_to_capture[capture_id]
+        
+        # Get sample rate
+        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate is None or sample_rate <= 0:
+            raise ValueError("Invalid or missing sample rate in parent file")
+        
+        # Get current start index
+        start_index = self.get(sigmf.SigMFFile.START_INDEX_KEY)
+        if start_index is None:
+            raise ValueError("Cannot set end time without a start index")
+        
+        # Convert end time to sample index and calculate length
+        end_sample_in_capture = int(end_time_sec * sample_rate)
+        end_index = capture.start_sample_idx + end_sample_in_capture
+        length = end_index - start_index
+        
+        if length <= 0:
+            raise ValueError("End time must be greater than start time")
+        
+        # Update the dictionary (this will trigger notification)
+        self[sigmf.SigMFFile.LENGTH_INDEX_KEY] = length
+    
+    # Duration getter and setter (property)
+    @property
+    def duration_sec(self) -> float | None:
+        """
+        Get the duration in seconds.
+        
+        Returns:
+            Duration in seconds, or None if LENGTH_INDEX_KEY is not set
+        """
+        length_samples = self.get(sigmf.SigMFFile.LENGTH_INDEX_KEY)
+        if length_samples is None:
+            return None
+        
+        parent: LoadedFile = self._parent_loadedfile
+        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate is None or sample_rate <= 0:
+            raise ValueError("Invalid or missing sample rate in parent file")
+        
+        return length_samples / sample_rate
+    
+    @duration_sec.setter
+    def duration_sec(self, duration_sec: float) -> None:
+        """
+        Set the duration in seconds.
+        This updates the LENGTH_INDEX_KEY in the annotation dictionary.
+        
+        Args:
+            duration_sec: The duration in seconds
+        """
+        if duration_sec <= 0:
+            raise ValueError("Duration must be positive")
+        
+        parent: LoadedFile = self._parent_loadedfile
+        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate is None or sample_rate <= 0:
+            raise ValueError("Invalid or missing sample rate in parent file")
+        
+        # Convert duration to samples
+        length_samples = int(duration_sec * sample_rate)
+        
+        # Update the dictionary (this will trigger notification)
+        self[sigmf.SigMFFile.LENGTH_INDEX_KEY] = length_samples
+    
+    # Center frequency getter and setter (property)
+    @property
+    def center_frequency_Hz(self) -> float | None:
+        """
+        Get the center frequency in Hz.
+        
+        Returns:
+            Center frequency in Hz, or None if FLO_KEY or FHI_KEY is not set
+        """
+        f_lo = self.get(sigmf.SigMFFile.FLO_KEY)
+        f_hi = self.get(sigmf.SigMFFile.FHI_KEY)
+        
+        if f_lo is None or f_hi is None:
+            return None
+        
+        return (f_lo + f_hi) / 2.0
+    
+    @center_frequency_Hz.setter
+    def center_frequency_Hz(self, center_freq_Hz: float) -> None:
+        """
+        Set the center frequency in Hz.
+        This updates both FLO_KEY and FHI_KEY based on the current bandwidth.
+        If bandwidth is not set, it defaults to 0 (making FLO_KEY = FHI_KEY = center_freq_Hz).
+        
+        Args:
+            center_freq_Hz: The center frequency in Hz
+        """
+        # Get current bandwidth (if it exists)
+        current_bandwidth = self.bandwidth_Hz
+        if current_bandwidth is None:
+            current_bandwidth = 0.0
+        
+        half_bw = current_bandwidth / 2.0
+        
+        # Update FLO and FHI (this will trigger notification for each update)
+        self[sigmf.SigMFFile.FLO_KEY] = center_freq_Hz - half_bw
+        self[sigmf.SigMFFile.FHI_KEY] = center_freq_Hz + half_bw
+    
+    # Bandwidth getter and setter (property)
+    @property
+    def bandwidth_Hz(self) -> float | None:
+        """
+        Get the bandwidth in Hz.
+        
+        Returns:
+            Bandwidth in Hz, or None if FLO_KEY or FHI_KEY is not set
+        """
+        f_lo = self.get(sigmf.SigMFFile.FLO_KEY)
+        f_hi = self.get(sigmf.SigMFFile.FHI_KEY)
+        
+        if f_lo is None or f_hi is None:
+            return None
+        
+        return f_hi - f_lo
+    
+    @bandwidth_Hz.setter
+    def bandwidth_Hz(self, bandwidth_Hz: float) -> None:
+        """
+        Set the bandwidth in Hz.
+        This updates both FLO_KEY and FHI_KEY based on the current center frequency.
+        If center frequency is not set, this will raise a ValueError.
+        
+        Args:
+            bandwidth_Hz: The bandwidth in Hz
+        """
+        if bandwidth_Hz < 0:
+            raise ValueError("Bandwidth must be non-negative")
+        
+        # Get current center frequency
+        current_center = self.center_frequency_Hz
+        if current_center is None:
+            raise ValueError("Cannot set bandwidth without a center frequency (FLO_KEY and FHI_KEY must be set)")
+        
+        half_bw = bandwidth_Hz / 2.0
+        
+        # Update FLO and FHI (this will trigger notification for each update)
+        self[sigmf.SigMFFile.FLO_KEY] = current_center - half_bw
+        self[sigmf.SigMFFile.FHI_KEY] = current_center + half_bw
+
 
 class LoadedFile:
     """
