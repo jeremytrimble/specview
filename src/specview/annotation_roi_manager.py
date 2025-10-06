@@ -94,8 +94,13 @@ class AnnotationROIManager(Generic[ROIType]):
             annotation_dict[sigmf.SigMFFile.FLO_KEY] = float(pos[0])
             annotation_dict[sigmf.SigMFFile.FHI_KEY] = float(pos[0] + size[0])
 
-
-            # TODO: Update time range here based on current capture and time mapping
+            # Update time range based on current capture
+            time_axis = annotation_dict.get_time_axis_for_capture(self._current_capture_id)
+            start_sample = time_axis.idx_nearest_to_value(float(pos[1]))
+            #length = int(round(size[1] * time_axis._slope))  # Convert time duration to samples
+            length = time_axis.idx_nearest_to_value(float(pos[1] + size[1])) - start_sample
+            annotation_dict[sigmf.SigMFFile.START_INDEX_KEY] = start_sample
+            annotation_dict[sigmf.SigMFFile.LENGTH_INDEX_KEY] = length
 
     def _on_linear_roi_changed(self, annotation_id: AnnotationID):
         """Handle changes to linear ROIs when they're dragged or resized."""
@@ -109,8 +114,12 @@ class AnnotationROIManager(Generic[ROIType]):
                 annotation_dict[sigmf.SigMFFile.FLO_KEY] = float(region[0])
                 annotation_dict[sigmf.SigMFFile.FHI_KEY] = float(region[1])
             elif self._roi_dimensions == ROIDimensions.TIME:
-                # TODO: Update time range here based on current capture and time mapping
-                pass
+                # Convert time range to sample indices
+                time_axis = annotation_dict.get_time_axis_for_capture(self._current_capture_id)
+                start_sample = time_axis.idx_nearest_to_value(float(region[0]))
+                end_sample = time_axis.idx_nearest_to_value(float(region[1]))
+                annotation_dict[sigmf.SigMFFile.START_INDEX_KEY] = start_sample
+                annotation_dict[sigmf.SigMFFile.LENGTH_INDEX_KEY] = end_sample - start_sample
 
     def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id: AnnotationID):
         """Create or update an annotation ROI based on the annotation ID."""

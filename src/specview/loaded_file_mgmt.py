@@ -5,6 +5,7 @@ from pathlib import Path
 import enum
 import sigmf
 from .sigmf_util import get_annotation_time_bound_relative_to_current_capture
+from .monotonic_axis import MonotonicAxis
 
 import random
 rnd = random.Random(42)
@@ -207,6 +208,30 @@ class LoadedAnnotationDict(dict):
         capture = parent._capture_id_to_capture[capture_id]
         return get_annotation_time_bound_relative_to_current_capture(self, capture.capture_idx_in_file, parent.sigmf_file)
 
+    def get_time_axis_for_capture(self, capture_id:CaptureID) -> MonotonicAxis:
+        """Returns a MonotonicAxis that maps sample indexes to floating-point time in seconds 
+        relative to the specified capture.
+        
+        Args:
+            capture_id: The ID of the capture to use as the time reference
+            
+        Returns:
+            MonotonicAxis: An axis that converts sample indexes to time in seconds
+        """
+        from .monotonic_axis import MonotonicAxis
+        parent: LoadedFile = self._parent_loadedfile
+
+        if not capture_id in parent._capture_id_to_capture:
+            raise ValueError(f"Capture ID {capture_id} not found in parent LoadedFile {parent.file_id}")
+
+        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY, 0.0)
+        if sample_rate <= 0.0:
+            raise ValueError(f"Invalid or missing sample rate in capture {capture_id}")
+
+        capture = parent._capture_id_to_capture[capture_id] # TODO: make this not access a private field of LoadedFile
+            
+        return MonotonicAxis(slope=1.0/sample_rate, num_points=capture.num_samples, intercept=capture.start_sample_idx)
+
     @property
     def label(self) -> str:
         label = self.get(sigmf.SigMFFile.LABEL_KEY)
@@ -233,6 +258,7 @@ class LoadedFile:
         self._file_path: Path = Path(self._sigmf_file.data_file)  # This is the path to the .sigmf-data file
         self._file_id: FileID = loaded_file_counter.get_next_id()
 
+        self._capture_idx_to_capture: dict[int, LoadedCaptureDict] = {}
         self._capture_id_to_capture: dict[CaptureID, LoadedCaptureDict] = {}
         self._annotation_id_to_annotation: dict[AnnotationID, LoadedAnnotationDict] = {}
 
@@ -240,6 +266,7 @@ class LoadedFile:
             capture_id = self._get_next_capture_id()
             lcd = LoadedCaptureDict.create_capture_dict(parent_loadedfile=self, capture_idx=cap_idx, capture_id=capture_id, capture_content=cap_dict)
             self._capture_id_to_capture[capture_id] = lcd
+            self._capture_idx_to_capture[cap_idx] = lcd
             self._parent_loaded_files._capture_id_to_capture[capture_id] = lcd  # store in the global mapping
 
         for annotation_dict in self._sigmf_file.get_annotations():
@@ -376,3 +403,24 @@ class LoadedCaptureDict(dict):
     @property
     def capture_idx_in_file(self) -> int:
         return self._capture_idx
+
+    @property
+    def start_sample_idx(self) -> int:
+        """
+        Returns the first sample index of this capture within the parent file.
+        """
+        return self[sigmf.SigMFFile.START_INDEX_KEY]
+
+    @property
+    def num_samples(self) -> int:
+        """
+        Returns the number of samples in this capture.
+        """
+        total_samples_in_file = self.parent_loadedfile.sigmf_file.sample_count
+
+        next_capture = self.parent_loadedfile._capture_idx_to_capture.get(self.capture_idx_in_file + 1)
+
+        if next_capture is not None:
+            return next_capture[sigmf.SigMFFile.START_INDEX_KEY] - self[sigmf.SigMFFile.START_INDEX_KEY]
+        else:
+            return total_samples_in_file - self[sigmf.SigMFFile.START_INDEX_KEY]
