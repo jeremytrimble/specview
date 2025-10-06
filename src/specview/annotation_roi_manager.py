@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import logging
 from PyQt5.QtWidgets import QApplication
 import pyqtgraph as pg
+import sigmf
 
 from .labeled_rect_roi import LabeledRectROI
 from .labeled_linear_region_item import LabeledLinearRegionItem
@@ -43,7 +44,6 @@ class AnnotationROIManager(Generic[ROIType]):
             is_rectangular: True if using rectangular ROIs, False for linear ROIs
         """
         self._plot_widget = plot_widget
-
         self._roi_dimensions = roi_dimensions
 
         if self._roi_dimensions in (ROIDimensions.FREQUENCY, ROIDimensions.TIME):
@@ -82,6 +82,36 @@ class AnnotationROIManager(Generic[ROIType]):
         for annotation_id in loaded_capture_dict.parent_loadedfile.get_annotations_dict().keys():
             self._create_or_update_annotation_roi_for_annotation_id(annotation_id)
             
+    def _on_rect_roi_changed(self, annotation_id: AnnotationID):
+        """Handle changes to rectangular ROIs when they're dragged or resized."""
+        aroi = self._annotation_rois[annotation_id]
+        rect_roi = aroi.roi
+        pos = rect_roi.pos()
+        size = rect_roi.size()
+        
+        annotation_dict = self._get_app_state().get_annotation_by_id(annotation_id)
+        if annotation_dict is not None:
+            annotation_dict[sigmf.SigMFFile.FLO_KEY] = float(pos[0])
+            annotation_dict[sigmf.SigMFFile.FHI_KEY] = float(pos[0] + size[0])
+
+
+            # TODO: Update time range here based on current capture and time mapping
+
+    def _on_linear_roi_changed(self, annotation_id: AnnotationID):
+        """Handle changes to linear ROIs when they're dragged or resized."""
+        aroi = self._annotation_rois[annotation_id]
+        linear_roi = aroi.roi
+        region = linear_roi.getRegion()
+        
+        annotation_dict = self._get_app_state().get_annotation_by_id(annotation_id)
+        if annotation_dict is not None:
+            if self._roi_dimensions == ROIDimensions.FREQUENCY:
+                annotation_dict[sigmf.SigMFFile.FLO_KEY] = float(region[0])
+                annotation_dict[sigmf.SigMFFile.FHI_KEY] = float(region[1])
+            elif self._roi_dimensions == ROIDimensions.TIME:
+                # TODO: Update time range here based on current capture and time mapping
+                pass
+
     def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id: AnnotationID):
         """Create or update an annotation ROI based on the annotation ID."""
         if self._current_capture_id is None:
@@ -116,6 +146,7 @@ class AnnotationROIManager(Generic[ROIType]):
                     label_fill_color=ANNOTATION_ROI_COLOR,
                 )
                 self._plot_widget.addItem(roi)
+                roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
                 aroi = AnnotationROI(ad.annotation_id, roi)
                 self._annotation_rois[ad.annotation_id] = aroi
             else:
@@ -141,6 +172,7 @@ class AnnotationROIManager(Generic[ROIType]):
                     label_fill_color=ANNOTATION_ROI_COLOR,
                 )
                 self._plot_widget.addItem(roi)
+                roi.sigRegionChanged.connect(lambda: self._on_linear_roi_changed(annotation_id))
                 aroi = AnnotationROI(ad.annotation_id, roi)
                 self._annotation_rois[ad.annotation_id] = aroi
             else:

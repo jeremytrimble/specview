@@ -137,6 +137,7 @@ class LoadedAnnotationDict(dict):
         rv._parent_loadedfile = parent_loadedfile
         rv._annotation_id = annotation_id
         rv._deactivated = False
+        rv._is_updating = False  # Instance-level flag to prevent recursive updates
         return rv
 
     @property
@@ -145,7 +146,12 @@ class LoadedAnnotationDict(dict):
     
     def _notify_parent_that_i_was_modified(self):
         if self._parent_loadedfile is not None:
-            self._parent_loadedfile._on_child_annotation_changed(self._annotation_id, LoadedDictAction.MODIFIED)
+            if not self._is_updating:
+                self._is_updating = True
+                try:
+                    self._parent_loadedfile._on_child_annotation_changed(self._annotation_id, LoadedDictAction.MODIFIED)
+                finally:
+                    self._is_updating = False
 
     def __setitem__(self, key, value):
         rv = super().__setitem__(key, value)
