@@ -224,13 +224,9 @@ class LoadedAnnotationDict(dict):
         if not capture_id in parent._capture_id_to_capture:
             raise ValueError(f"Capture ID {capture_id} not found in parent LoadedFile {parent.file_id}")
 
-        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY, 0.0)
-        if sample_rate <= 0.0:
-            raise ValueError(f"Invalid or missing sample rate in capture {capture_id}")
-
         capture = parent._capture_id_to_capture[capture_id] # TODO: make this not access a private field of LoadedFile
-            
-        return MonotonicAxis(slope=1.0/sample_rate, num_points=capture.num_samples, intercept=capture.start_sample_idx)
+
+        return capture.time_axis
 
     @property
     def label(self) -> str:
@@ -267,18 +263,9 @@ class LoadedAnnotationDict(dict):
         """
         parent: LoadedFile = self._parent_loadedfile
         capture = parent._capture_id_to_capture[capture_id]
-        
-        # Get sample rate
-        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
-        if sample_rate is None or sample_rate <= 0:
-            raise ValueError("Invalid or missing sample rate in parent file")
-        
-        # Convert time to sample index
-        start_sample_in_capture = int(start_time_sec * sample_rate)
-        start_index = capture.start_sample_idx + start_sample_in_capture
-        
+
         # Update the dictionary (this will trigger notification)
-        self[sigmf.SigMFFile.START_INDEX_KEY] = start_index
+        self[sigmf.SigMFFile.START_INDEX_KEY] = capture.time_axis.idx_nearest_to_value(start_time_sec)
     
     def get_end_time_sec(self, capture_id: CaptureID) -> float | None:
         """
@@ -306,7 +293,7 @@ class LoadedAnnotationDict(dict):
         """
         parent: LoadedFile = self._parent_loadedfile
         capture = parent._capture_id_to_capture[capture_id]
-        
+
         # Get sample rate
         sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
         if sample_rate is None or sample_rate <= 0:
@@ -408,6 +395,22 @@ class LoadedAnnotationDict(dict):
         # Update FLO and FHI (this will trigger notification for each update)
         self[sigmf.SigMFFile.FLO_KEY] = center_freq_Hz - half_bw
         self[sigmf.SigMFFile.FHI_KEY] = center_freq_Hz + half_bw
+
+    
+    @property
+    def low_frequency_Hz(self) -> float | None:
+        return self.get(sigmf.SigMFFile.FLO_KEY)
+    @low_frequency_Hz.setter
+    def low_frequency_Hz(self, low_freq_Hz: float) -> None:
+        self[sigmf.SigMFFile.FLO_KEY] = low_freq_Hz
+
+    @property
+    def high_frequency_Hz(self) -> float | None:
+        return self.get(sigmf.SigMFFile.FHI_KEY)
+    @high_frequency_Hz.setter
+    def high_frequency_Hz(self, hi_freq_Hz: float) -> None:
+        self[sigmf.SigMFFile.FHI_KEY] = hi_freq_Hz
+
     
     # Bandwidth getter and setter (property)
     @property
@@ -634,3 +637,17 @@ class LoadedCaptureDict(dict):
             return next_capture[sigmf.SigMFFile.START_INDEX_KEY] - self[sigmf.SigMFFile.START_INDEX_KEY]
         else:
             return total_samples_in_file - self[sigmf.SigMFFile.START_INDEX_KEY]
+
+    @property
+    def time_axis(self) -> MonotonicAxis:
+        """
+        Returns a MonotonicAxis that maps sample indexes to floating-point time in seconds
+        relative to this capture.
+        """
+        parent: LoadedFile = self._parent_loadedfile
+
+        sample_rate = parent.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY, 0.0)
+        if sample_rate <= 0.0:
+            raise ValueError(f"Invalid or missing sample rate in capture {self.capture_id}")
+
+        return MonotonicAxis(slope=1.0/sample_rate, num_points=self.num_samples, intercept=self.start_sample_idx)

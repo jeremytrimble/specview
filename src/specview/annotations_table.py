@@ -13,18 +13,21 @@ from .util import duration_format, freq_format
 class AnnotationsModel(QAbstractTableModel):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._current_capture_fileid: str|None = None
+        self._current_capture_id: CaptureID|None = None
         self._connect_app_signals()
 
-        self._NUM_COLUMNS = 6
         self._column_names = (
             "Label",
             "Start Time",
             "End Time",
+            "Duration (sec)",
             "Low Freq",
+            "Center Freq",
             "High Freq",
+            "Bandwidth",
             "More Info",
         )
+        self._NUM_COLUMNS = len(self._column_names)
 
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
@@ -35,29 +38,25 @@ class AnnotationsModel(QAbstractTableModel):
         app_state.annotation_changed.connect(self._on_annotation_changed)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
-
-        app_state = self._get_app_state()
-        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
-        fileid = loaded_capture_dict.parent_loadedfile.file_id
-
-        self._current_capture_fileid = fileid
-
+        self._current_capture_id = capture_id
         # layoutChanged indicates that the SHAPE of the model has changed,
         # dataChanged is for when just some elements of the data have changed
         # but the shape remains the same
         self.layoutChanged.emit() 
 
     def _on_annotation_changed(self, annotation_id:AnnotationID, action: LoadedDictAction):
-        if action == LoadedDictAction.ADDED or action == LoadedDictAction.DELETED:
+        if action == LoadedDictAction.MODIFIED:
+            top_left = self.createIndex(0, 0)
+            bottom_right = self.createIndex(self.rowCount(None) - 1, self.columnCount(None) - 1)
+            self.dataChanged.emit(top_left, bottom_right)
+        elif action in (LoadedDictAction.LOADED, LoadedDictAction.ADDED, LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
             self.layoutChanged.emit()
-        elif action == LoadedDictAction.MODIFIED:
-            self.dataChanged.emit()
 
     def _get_current_capture_annotations(self):
-        if self._current_capture_fileid is None:
+        if self._current_capture_id is None:
             return None
         app_state = self._get_app_state()
-        annotations_dict = app_state._loaded_files._fileid_to_loadedfile[self._current_capture_fileid].get_annotations_dict()
+        annotations_dict = app_state._loaded_files.get_capture_from_id(self._current_capture_id).parent_loadedfile.get_annotations_dict()
         return annotations_dict
 
     def rowCount(self, index):
@@ -69,7 +68,7 @@ class AnnotationsModel(QAbstractTableModel):
 
     def columnCount(self, index):
         # TODO: what is index for?
-        return self._NUM_COLUMNS  # Assuming two columns: 'Annotation' and 'Value'
+        return self._NUM_COLUMNS
 
     def headerData(self, section, orientation, role):
         if role == Qt.DisplayRole:
@@ -87,39 +86,52 @@ class AnnotationsModel(QAbstractTableModel):
             if row < 0 or row >= len(keys) or col < 0 or col >= self._NUM_COLUMNS:
                 return None
             annotation = annotations_dict[keys[row]]
-            #print(f"{type(annotation)=}, {annotation=}, {row=}, {col=}")
             if col == 0:
                 return annotation.get(sigmf.SigMFFile.LABEL_KEY, "--")
             elif col == 1:
-                v = annotation.get(sigmf.SigMFFile.START_INDEX_KEY)
-                # TODO: turn into duration format!
+                v = annotation.get_start_time_sec(self._current_capture_id)
                 if v is None:
                     return "--"
                 else:
-                    #return duration_format(v)
-                    return "TODO"
+                    return duration_format(v)
             elif col == 2:
-                v = annotation.get(sigmf.SigMFFile.LENGTH_INDEX_KEY)
-                # TODO: turn into duration format!
+                v = annotation.get_end_time_sec(self._current_capture_id)
                 if v is None:
                     return "--"
                 else:
-                    #return duration_format(v)
-                    return "TODO"
+                    return duration_format(v)
             elif col == 3:
-                v = annotation.get(sigmf.SigMFFile.FLO_KEY)
+                v = annotation.duration_sec
                 if v is None:
                     return "--"
                 else:
-                    return freq_format(v)
+                    return duration_format(v)
             elif col == 4:
-                v = annotation.get(sigmf.SigMFFile.FHI_KEY)
+                v = annotation.low_frequency_Hz
                 if v is None:
                     return "--"
                 else:
                     return freq_format(v)
             elif col == 5:
-                return "TODO"   # put a button here to edit the annotation
+                v = annotation.center_frequency_Hz
+                if v is None:
+                    return "--"
+                else:
+                    return freq_format(v)
+            elif col == 6:
+                v = annotation.high_frequency_Hz
+                if v is None:
+                    return "--"
+                else:
+                    return freq_format(v)
+            elif col == 7:
+                v = annotation.bandwidth_Hz
+                if v is None:
+                    return "--"
+                else:
+                    return freq_format(v)
+            elif col == 8:
+                return "TODO"   # put more here
 
     #def set_data(self, data):
     #    self.beginResetModel()
