@@ -5,7 +5,84 @@ from PyQt5.QtWidgets import QApplication, QAction
 from .app_state import AppState
 
 import logging
+import sigmf
+
 log = logging.getLogger("menu")
+
+def create_annotation_from_selection() -> None:
+    """
+    Create an annotation from the current time and frequency selections.
+    """
+    app_state: AppState = QApplication.instance().app_state  # type: ignore[union-attr]
+    
+    # Get the time interval (required)
+    time_interval = app_state._time_interval
+    if time_interval is None:
+        log.warning("No time selection available. Cannot create annotation.")
+        return
+    
+    # Get the frequency interval (optional)
+    frequency_interval = app_state._frequency_interval
+    
+    # Get the selected capture
+    selected_capture_id = app_state._selected_capture
+    if selected_capture_id is None:
+        log.warning("No capture selected. Cannot create annotation.")
+        return
+    
+    # Get the capture dictionary
+    capture = app_state.get_capture_by_id(selected_capture_id)
+    if capture is None:
+        log.warning(f"Capture {selected_capture_id} not found. Cannot create annotation.")
+        return
+    
+    # Get the parent LoadedFile
+    loaded_file = capture.parent_loadedfile
+    
+    # Get the sample rate from the SigMF file
+    sample_rate = loaded_file.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+    if sample_rate is None or sample_rate <= 0:
+        log.error("Invalid or missing sample rate. Cannot create annotation.")
+        return
+    
+    # Extract time bounds
+    start_time_sec, end_time_sec = time_interval
+    
+    # Convert time to sample indices
+    start_index = int(start_time_sec * sample_rate)
+    end_index = int(end_time_sec * sample_rate)
+    length = end_index - start_index
+    
+    if length <= 0:
+        log.warning("Invalid time selection (end time must be greater than start time).")
+        return
+    
+    # Generate a meaningful label
+    label_parts = [f"t={start_time_sec:.3f}s to {end_time_sec:.3f}s"]
+    
+    # Create metadata dictionary
+    metadata: dict[str, float | str] = {
+        sigmf.SigMFFile.LABEL_KEY: ", ".join(label_parts)
+    }
+    
+    # Add frequency bounds if available
+    if frequency_interval is not None:
+        low_freq_Hz, high_freq_Hz = frequency_interval
+        metadata[sigmf.SigMFFile.FLO_KEY] = low_freq_Hz
+        metadata[sigmf.SigMFFile.FHI_KEY] = high_freq_Hz
+        label_parts.append(f"f={low_freq_Hz/1e6:.3f}MHz to {high_freq_Hz/1e6:.3f}MHz")
+        metadata[sigmf.SigMFFile.LABEL_KEY] = ", ".join(label_parts)
+    
+    # Create the annotation
+    try:
+        annotation = loaded_file.add_annotation(
+            start_index=start_index,
+            length=length,
+            metadata=metadata
+        )
+        log.info(f"Created annotation: {metadata[sigmf.SigMFFile.LABEL_KEY]}")
+    except Exception as e:
+        log.error(f"Failed to create annotation: {e}")
 
 def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     """
@@ -44,7 +121,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
 
     annotation_from_selection = QAction(text="Annotation from Selection", parent=parent)
     annotation_from_selection.setShortcut("Ctrl+T")
-    annotation_from_selection.triggered.connect(lambda: print("TODO: annotaton_from_selection!!!"))
+    annotation_from_selection.triggered.connect(lambda: create_annotation_from_selection())
 
     annotations_menu = QMenu("&Annotations", menu_bar)
     annotations_menu.addAction(annotation_from_selection)
