@@ -1,4 +1,5 @@
-from specview.util import duration_format, freq_format
+from specview.util import duration_format, freq_format, parse_unit_prefix, parse_time_str, parse_freq_str
+import pytest
 
 
 #def test_freq_format():
@@ -39,3 +40,103 @@ def test_duration_format():
     assert duration_format(123e-12) == "123ps"
 
     assert duration_format(999e-3) == "999ms"
+
+
+def test_parse_unit_prefix():
+    # Basic number parsing
+    assert parse_unit_prefix("1.5") == (1.5, "")
+    assert parse_unit_prefix("-1.5") == (-1.5, "")
+    assert parse_unit_prefix("1e6") == (1e6, "")
+    assert parse_unit_prefix("-1.5e-6") == (-1.5e-6, "")
+    
+    # SI prefixes without units
+    assert parse_unit_prefix("1.5k") == (1500.0, "")
+    assert parse_unit_prefix("-1.5k") == (-1500.0, "")
+    assert parse_unit_prefix("1.5M") == (1.5e6, "")
+    assert parse_unit_prefix("1.5G") == (1.5e9, "")
+    assert parse_unit_prefix("1.5T") == (1.5e12, "")
+    assert parse_unit_prefix("1.5m") == (1.5e-3, "")
+    assert parse_unit_prefix("1.5µ") == (1.5e-6, "")
+    assert parse_unit_prefix("1.5μ") == (1.5e-6, "")  # alternative form
+    assert parse_unit_prefix("1.5u") == (1.5e-6, "")  # ASCII form
+    assert parse_unit_prefix("1.5n") == (1.5e-9, "")
+    assert parse_unit_prefix("1.5p") == (1.5e-12, "")
+    assert parse_unit_prefix("1.5f") == (1.5e-15, "")
+    
+    # SI prefixes with units
+    assert parse_unit_prefix("1.5kHz") == (1500.0, "Hz")
+    assert parse_unit_prefix("1.5MHz") == (1.5e6, "Hz")
+    assert parse_unit_prefix("1.5ms") == (1.5e-3, "s")
+    
+    # Edge cases
+    assert parse_unit_prefix("0") == (0.0, "")
+    assert parse_unit_prefix("-0") == (0.0, "")
+    assert parse_unit_prefix("1.5 MHz") == (1.5e6, "Hz")  # space handling
+    
+    # Error cases
+    with pytest.raises(ValueError):
+        parse_unit_prefix("")
+    with pytest.raises(ValueError):
+        parse_unit_prefix("abc")
+    with pytest.raises(ValueError):
+        parse_unit_prefix("1.5x")  # invalid prefix
+
+
+def test_parse_time_str():
+    # Basic time values
+    assert parse_time_str("1.5") == 1.5
+    assert parse_time_str("1.5s") == 1.5
+    assert parse_time_str("-1.5s") == -1.5
+    
+    # SI prefixes
+    assert parse_time_str("1.5ms") == 1.5e-3
+    assert parse_time_str("1.5µs") == 1.5e-6
+    assert parse_time_str("1.5μs") == 1.5e-6  # alternative form
+    assert parse_time_str("1.5us") == 1.5e-6  # ASCII form
+    assert parse_time_str("1.5ns") == 1.5e-9
+    assert parse_time_str("1.5ps") == 1.5e-12
+    assert parse_time_str("1.5fs") == 1.5e-15
+    
+    # Scientific notation
+    assert parse_time_str("1.5e-3s") == 1.5e-3
+    assert parse_time_str("-1.5e-3s") == -1.5e-3
+    
+    # Error cases
+    with pytest.raises(ValueError):
+        parse_time_str("1.5min")  # invalid unit
+    with pytest.raises(ValueError):
+        parse_time_str("")  # empty string
+    with pytest.raises(ValueError):
+        parse_time_str("abc")  # invalid format
+
+
+def test_parse_freq_str():
+    # Basic frequency values
+    assert parse_freq_str("1.5") == 1.5
+    assert parse_freq_str("1.5Hz") == 1.5
+    assert parse_freq_str("-1.5Hz") == -1.5
+    
+    # SI prefixes
+    assert parse_freq_str("1.5kHz") == 1.5e3
+    assert parse_freq_str("1.5MHz") == 1.5e6
+    assert parse_freq_str("1.5GHz") == 1.5e9
+    assert parse_freq_str("1.5THz") == 1.5e12
+    assert parse_freq_str("1.5mHz") == 1.5e-3
+    assert parse_freq_str("1.5µHz") == 1.5e-6
+    assert parse_freq_str("1.5μHz") == 1.5e-6  # alternative form
+    assert parse_freq_str("1.5uHz") == 1.5e-6  # ASCII form
+    assert parse_freq_str("1.5nHz") == 1.5e-9
+    assert parse_freq_str("1.5pHz") == 1.5e-12
+    assert parse_freq_str("1.5fHz") == 1.5e-15
+    
+    # Scientific notation
+    assert parse_freq_str("1.5e6Hz") == 1.5e6
+    assert parse_freq_str("-1.5e6Hz") == -1.5e6
+    
+    # Error cases
+    with pytest.raises(ValueError):
+        parse_freq_str("1.5khz")  # wrong case
+    with pytest.raises(ValueError):
+        parse_freq_str("")  # empty string
+    with pytest.raises(ValueError):
+        parse_freq_str("abc")  # invalid format

@@ -5,7 +5,7 @@ from .loaded_file_mgmt import LoadedDictAction, AnnotationID, CaptureID
 
 from .app_state import AppState
 import sigmf
-from .util import duration_format, freq_format
+from .util import duration_format, freq_format, parse_time_str, parse_freq_str
 
 # Note: difference between QTableWidget and QTableView is that QTableWidget has
 # its own built-in model, whereas QTableView requires a separate model to be developed
@@ -27,6 +27,15 @@ class AnnotationsModel(QAbstractTableModel):
             "Bandwidth",
             "More Info",
         )
+        # Define which columns are editable - Duration and Bandwidth are derived values
+        self._editable_columns = {
+            0,  # Label
+            1,  # Start Time
+            2,  # End Time
+            4,  # Low Freq
+            5,  # Center Freq
+            6,  # High Freq
+        }
         self._NUM_COLUMNS = len(self._column_names)
 
     def _get_app_state(self) -> AppState:
@@ -74,6 +83,12 @@ class AnnotationsModel(QAbstractTableModel):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 return self._column_names[section]
+
+    def flags(self, index):
+        base_flags = super().flags(index)
+        if index.column() in self._editable_columns:
+            return base_flags | Qt.ItemIsEditable
+        return base_flags
 
     def data(self, index, role=None):
         annotations_dict = self._get_current_capture_annotations()
@@ -133,10 +148,64 @@ class AnnotationsModel(QAbstractTableModel):
             elif col == 8:
                 return "TODO"   # put more here
 
-    #def set_data(self, data):
-    #    self.beginResetModel()
-    #    self._data = data
-    #    self.endResetModel()
+    def setData(self, index, value, role=Qt.EditRole):
+        if role != Qt.EditRole:
+            return False
+
+        annotations_dict = self._get_current_capture_annotations()
+        if annotations_dict is None:
+            return False
+
+        keys = list(annotations_dict.keys())
+        row = index.row()
+        col = index.column()
+
+        if row < 0 or row >= len(keys):
+            return False
+
+        annotation = annotations_dict[keys[row]]
+        try:
+            if col == 0:  # Label
+                annotation[sigmf.SigMFFile.LABEL_KEY] = str(value)
+            elif col == 1:  # Start Time
+                try:
+                    time_sec = parse_time_str(str(value))
+                    annotation.set_start_time_sec(self._current_capture_id, time_sec)
+                except ValueError:
+                    return False
+            elif col == 2:  # End Time
+                try:
+                    time_sec = parse_time_str(str(value))
+                    annotation.set_end_time_sec(self._current_capture_id, time_sec)
+                except ValueError:
+                    return False
+            elif col == 4:  # Low Freq
+                try:
+                    freq = parse_freq_str(str(value))
+                    annotation.low_frequency_Hz = freq
+                except ValueError:
+                    return False
+            elif col == 5:  # Center Freq
+                try:
+                    freq = parse_freq_str(str(value))
+                    annotation.center_frequency_Hz = freq
+                except ValueError:
+                    return False
+            elif col == 6:  # High Freq
+                try:
+                    freq = parse_freq_str(str(value))
+                    annotation.high_frequency_Hz = freq
+                except ValueError:
+                    return False
+            else:
+                return False
+
+            # Emit dataChanged signal to update the view
+            self.dataChanged.emit(index, index)
+            return True
+        except Exception as e:
+            print(f"Error updating annotation: {e}")
+            return False
 
 class AnnotationsTable(QWidget):
     def __init__(self, parent=None):

@@ -147,3 +147,82 @@ def first_from_dict(d:dict[Ktype,Vtype], return_none_on_empty:bool=True) -> Vtyp
         return None
     key0 = list(d.keys())[0]
     return d[key0]
+
+def parse_unit_prefix(value_str: str) -> tuple[float, str]:
+    """Parse a string with an SI prefix into a numeric value and remaining unit string.
+    Examples:
+        "1.5M" -> (1.5e6, "")
+        "1.5MHz" -> (1.5e6, "Hz")
+        "1.5" -> (1.5, "")
+        "-1.5k" -> (-1500.0, "")
+    """
+    value_str = value_str.strip()
+    if not value_str:
+        raise ValueError("Empty string")
+
+    # Find where the numeric part ends
+    numeric_end = 0
+    for i, c in enumerate(value_str):
+        if numeric_end == 0 and c in '0123456789.-+':
+            continue
+        if c in '0123456789.eE':
+            continue
+        numeric_end = i
+        break
+    
+    if numeric_end == 0:
+        numeric_end = len(value_str)
+    
+    try:
+        number = float(value_str[:numeric_end])
+    except ValueError:
+        raise ValueError(f"Invalid number format: {value_str[:numeric_end]}")
+    
+    remaining = value_str[numeric_end:]
+    if not remaining:
+        return number, ""
+    
+    # Handle SI prefixes
+    prefix_map = {
+        'f': 1e-15,
+        'p': 1e-12,
+        'n': 1e-9,
+        'u': 1e-6,
+        'µ': 1e-6,  # support both forms
+        'μ': 1e-6,  # support both forms
+        'm': 1e-3,
+        'k': 1e3,
+        'M': 1e6,
+        'G': 1e9,
+        'T': 1e12
+    }
+    
+    if remaining[0] in prefix_map:
+        multiplier = prefix_map[remaining[0]]
+        return number * multiplier, remaining[1:]
+    
+    return number, remaining
+
+def parse_time_str(time_str: str) -> float:
+    """Parse a time string with optional SI prefix.
+    Examples:
+        "1.5s" -> 1.5
+        "1.5ms" -> 0.0015
+        "1.5" -> 1.5
+    """
+    value, unit = parse_unit_prefix(time_str)
+    if unit and unit != 's':
+        raise ValueError(f"Invalid time unit: {unit}")
+    return value
+
+def parse_freq_str(freq_str: str) -> float:
+    """Parse a frequency string with optional SI prefix.
+    Examples:
+        "1.5Hz" -> 1.5
+        "1.5MHz" -> 1500000.0
+        "1.5" -> 1.5
+    """
+    value, unit = parse_unit_prefix(freq_str)
+    if unit and unit != 'Hz':
+        raise ValueError(f"Invalid frequency unit: {unit}")
+    return value
