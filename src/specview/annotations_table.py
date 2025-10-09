@@ -27,14 +27,16 @@ class AnnotationsModel(QAbstractTableModel):
             "Bandwidth",
             "More Info",
         )
-        # Define which columns are editable - Duration and Bandwidth are derived values
+        # Define which columns are editable
         self._editable_columns = {
             0,  # Label
             1,  # Start Time
             2,  # End Time
+            3,  # Duration
             4,  # Low Freq
             5,  # Center Freq
             6,  # High Freq
+            7,  # Bandwidth
         }
         self._NUM_COLUMNS = len(self._column_names)
 
@@ -195,6 +197,24 @@ class AnnotationsModel(QAbstractTableModel):
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.high_frequency_Hz = freq
+                except ValueError:
+                    return False
+            elif col == 3:  # Duration
+                try:
+                    duration_sec = parse_time_str(str(value))
+                    annotation.duration_sec = duration_sec  # This will update end time keeping start time fixed
+                except ValueError:
+                    return False
+            elif col == 5:  # Center Freq
+                try:
+                    freq = parse_freq_str(str(value))
+                    annotation.center_frequency_Hz = freq  # This will update high/low keeping bandwidth fixed
+                except ValueError:
+                    return False
+            elif col == 7:  # Bandwidth
+                try:
+                    freq = parse_freq_str(str(value))
+                    annotation.bandwidth_Hz = freq  # This will update high/low keeping center fixed
                 except ValueError:
                     return False
             else:

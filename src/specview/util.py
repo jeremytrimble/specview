@@ -84,7 +84,7 @@ def duration_format(seconds: float) -> str:
         val, unit_str = unit_value_to_prefixed_units(seconds, "s")
         if val == 0.0:
             return "0.0s"
-        return f"{val:.1f} {unit_str}"
+        return f"{val:.1f}{unit_str}"
 
     prefix = ""
     if seconds < 0:
@@ -179,6 +179,7 @@ def parse_unit_prefix(value_str: str) -> tuple[float, str]:
         raise ValueError(f"Invalid number format: {value_str[:numeric_end]}")
     
     remaining = value_str[numeric_end:]
+    remaining = remaining.strip()
     if not remaining:
         return number, ""
     

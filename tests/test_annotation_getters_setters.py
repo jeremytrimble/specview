@@ -46,11 +46,11 @@ def test_get_start_time_sec(tmpdir):
     second_capture_id = capture_ids[1]
     
     # Test getting start time for first capture
-    start_time = ann.get_start_time_sec_relative_to_capture(first_capture_id)
+    start_time = ann.get_start_time_sec(first_capture_id)
     assert start_time == 0.1  # 100,000 samples / 1e6 samples/sec = 0.1 sec
     
     # Annotation is not in second capture
-    start_time = ann.get_start_time_sec_relative_to_capture(second_capture_id)
+    start_time = ann.get_start_time_sec(second_capture_id)
     assert start_time is None
 
 
@@ -71,7 +71,7 @@ def test_set_start_time_sec(tmpdir):
     
     # Verify the change
     assert ann[SigMFFile.START_INDEX_KEY] == 200_000  # 0.2 sec * 1e6 samples/sec = 200,000 samples
-    assert ann.get_start_time_sec_relative_to_capture(first_capture_id) == 0.2
+    assert ann.get_start_time_sec(first_capture_id) == 0.2
 
 
 def test_get_end_time_sec(tmpdir):
