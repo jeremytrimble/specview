@@ -263,10 +263,10 @@ class AppState(QObject):
         return tser, sgram
 
     def save_current_file(self):
-        if self._selected_capture_fileid is None:
+        if self._selected_capture is None:
             return
 
-        current_loaded_file = self._loaded_files.loaded_file_dict[self._selected_capture_fileid]
+        current_loaded_file = self._loaded_files._capture_id_to_capture[self._selected_capture].parent_loadedfile
         smf = current_loaded_file.sigmf_file
         with measure_runtime(f"Save SigMF File: {smf.data_file}", log_level=logging.CRITICAL):
             meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)["meta_fn"]
