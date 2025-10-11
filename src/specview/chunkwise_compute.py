@@ -311,11 +311,12 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         num_input_samples = signal_file.stat().st_size // (int(signal_file_datatype.itemsize) * num_channels)
         input_shape = (num_input_samples, num_channels)
 
-        with open(signal_file, 'rb') as f:
-            f.seek(start_sample * signal_file_datatype.itemsize * num_channels)
-            num_samples_to_read = end_sample - start_sample
-            data = np.fromfile(f, dtype=signal_file_datatype, count=num_samples_to_read * num_channels)
-            data = data.reshape((num_samples_to_read, num_channels))
+        num_samples_to_read = end_sample - start_sample
+
+        # Use read-only memmap to access the input data
+        data = np.memmap(signal_file, dtype=signal_file_datatype, mode='r', 
+                        offset=start_sample * signal_file_datatype.itemsize * num_channels,
+                        shape=(num_samples_to_read, num_channels))
 
         if comp_spec.computation_type == TimeDomainComputationType.RAW:
             output_data = data

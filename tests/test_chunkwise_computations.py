@@ -65,7 +65,7 @@ def test_chunkwise_computation(tmpdir):
         start_sample = 1*100_000 + 12345
         end_sample = 3*100_000 + 12345
         computed_array.get_range_callback(start_sample, end_sample, cb)  # Just to test the callback
-        evt.wait(timeout=10)
+        evt.wait(timeout=3)
         assert evt.is_set()
 
         data = saved["data"]
