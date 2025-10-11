@@ -3,7 +3,10 @@ from specview.chunkwise_compute import (
     RawTimeDomainComputationSpec, 
     RealComponentTimeDomainComputationSpec,
     ImagComponentTimeDomainComputationSpec,
-    ProcessingPoolManager, ChunkwiseComputedArray
+    ProcessingPoolManager, ChunkwiseComputedArray,
+
+    FrequencyDomainChunkwiseComputedArray,
+    FrequencyDomainComputationSpec
 )
 import numpy as np
 from pathlib import Path
@@ -24,7 +27,7 @@ def test_print_cplx64_itemsize():
     assert dt.itemsize == 8
 
 
-def test_chunkwise_computation(tmpdir):
+def test_chunkwise_computation_timedomain(tmpdir):
     """Test chunkwise computation on a generated binary file."""
     num_samples = 2_000_000
     chunk_size = 100_000
@@ -74,3 +77,48 @@ def test_chunkwise_computation(tmpdir):
         assert np.allclose(data[:,0], np.imag(np.fromfile(input_signal_file, dtype=np.complex64, count=(end_sample - start_sample), offset=start_sample*8)))
         
 
+def test_chunkwise_computation_frequency_domain(tmpdir):
+    num_samples = 2_000_000
+    chunk_size = 100
+    input_signal_file = Path(tmpdir / "input_signal.bin")
+    generate_numpy_binary_file(input_signal_file, num_samples)
+
+    cache_manager = CacheManager( Path(tmpdir / "cachemgr") )
+
+    # Define a computation spec (e.g., compute real part)
+    comp_spec = FrequencyDomainComputationSpec(NFFT=256)
+
+    ppm = ProcessingPoolManager()
+
+    with closing(ppm):
+        # Create the chunkwise computed array
+        computed_array = FrequencyDomainChunkwiseComputedArray(
+            signal_file=input_signal_file,
+            signal_file_datatype=np.dtype(np.complex64),
+            num_input_channels=1,
+            target_output_channel=0,
+            sample_rate_Hz=1e6,
+            comp_spec=comp_spec,
+            cache_manager=cache_manager,
+            processing_pool_manager=ppm,
+            chunk_size_samples=chunk_size,
+        )
+
+        shape, output_dtype = computed_array.get_shape_and_dtype()
+        assert shape[1] == 256  # NFFT
+        assert output_dtype == np.float32
+
+        evt = threading.Event()
+        saved = {}
+        def cb(array: ChunkwiseComputedArray, start_idx: int, end_idx: int, array_data: np.ndarray):
+            print(f"Callback received data from {start_idx} to {end_idx}")
+            saved["data"] = array_data 
+            evt.set()
+
+        #computed_array.get_range_callback(0, 10, cb)  # Just to test no exceptions
+        computed_array.get_range_callback(0, 1000, cb)  # Just to test no exceptions
+
+        evt.wait(timeout=3)
+        assert evt.is_set()
+
+        print(f"data.shape = {saved['data'].shape}")
