@@ -62,7 +62,7 @@ class CacheManager:
 
 class TimeDomainComputationType(IntEnum):
     RAW = 0
-    MAGNITUDE = 1
+    MAGNITUDE_DB = 1
     REAL = 2
     IMAG = 3
     FM_DEMOD = 4
@@ -80,7 +80,7 @@ class RawTimeDomainComputationSpec(TimeDomainComputationSpec):
 
 @dataclass
 class MagnitudeTimeDomainComputationSpec(TimeDomainComputationSpec):
-    computation_type: TimeDomainComputationType = TimeDomainComputationType.MAGNITUDE
+    computation_type: TimeDomainComputationType = TimeDomainComputationType.MAGNITUDE_DB
 
 @dataclass
 class RealComponentTimeDomainComputationSpec(TimeDomainComputationSpec):
@@ -209,7 +209,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._input_shape = (num_input_samples, self._num_channels)
         self._output_shape = (num_input_samples, self._num_channels)
 
-        if comp_spec.computation_type in (TimeDomainComputationType.REAL, TimeDomainComputationType.IMAG, TimeDomainComputationType.FM_DEMOD, TimeDomainComputationType.MAGNITUDE): #, TimeDomainComputationType.AM_DEMOD):
+        if comp_spec.computation_type in (TimeDomainComputationType.REAL, TimeDomainComputationType.IMAG, TimeDomainComputationType.FM_DEMOD, TimeDomainComputationType.MAGNITUDE_DB): #, TimeDomainComputationType.AM_DEMOD):
             self._output_dtype = np.dtype(np.float32)
         elif comp_spec.computation_type in (TimeDomainComputationType.RAW,):
             self._output_dtype = self._signal_file_datatype
@@ -319,8 +319,8 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         if comp_spec.computation_type == TimeDomainComputationType.RAW:
             output_data = data
-        elif comp_spec.computation_type == TimeDomainComputationType.MAGNITUDE:
-            output_data = np.abs(data)
+        elif comp_spec.computation_type == TimeDomainComputationType.MAGNITUDE_DB:
+            output_data = 20 * np.log10(np.abs(data))
         elif comp_spec.computation_type == TimeDomainComputationType.REAL:
             output_data = np.real(data)
         elif comp_spec.computation_type == TimeDomainComputationType.IMAG:
@@ -330,9 +330,9 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             phase = np.angle(data)
             phase_diff = np.diff(phase, axis=0, prepend=phase[0:1, :])
             output_data = phase_diff
-        elif comp_spec.computation_type == TimeDomainComputationType.AM_DEMOD:
-            # AM demodulation using magnitude
-            output_data = np.abs(data)
+        #elif comp_spec.computation_type == TimeDomainComputationType.AM_DEMOD:
+        #    # AM demodulation using magnitude
+        #    output_data = np.abs(data)
         else:
             raise ValueError(f"Unsupported computation type: {comp_spec.computation_type}")
 
