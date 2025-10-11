@@ -133,8 +133,9 @@ class LoadedAnnotationDict(dict):
     """
     @classmethod
     def create_annotation_dict(cls, parent_loadedfile: LoadedFile, annotation_id:AnnotationID, annotation_content:dict) -> LoadedAnnotationDict:
-        # TODO: don't instantiate a second dictionary -- rather, wrap the existing dictionary with methods that access the underlying
-        rv = cls(annotation_content)
+        rv = cls()
+        # TODO: there is probably a more guaranteed-correct way to "wrap" a dictionary 
+        rv._underlying_dict = annotation_content
         rv._parent_loadedfile = parent_loadedfile
         rv._annotation_id = annotation_id
         rv._deactivated = False
@@ -154,28 +155,52 @@ class LoadedAnnotationDict(dict):
                 finally:
                     self._is_updating = False
 
+    def __iter__(self):
+        return self._underlying_dict.__iter__()
+
+    def __len__(self):
+        return self._underlying_dict.__len__()
+
+    def __contains__(self, key):
+        return key in self._underlying_dict
+
+    def keys(self):
+        return self._underlying_dict.keys()
+
+    def values(self):
+        return self._underlying_dict.values()
+
+    def items(self):
+        return self._underlying_dict.items()
+
+    def get(self, key, default=None):
+        return self._underlying_dict.get(key, default)
+
+    def __getitem__(self, key):
+        return self._underlying_dict.__getitem__(key)
+
     def __setitem__(self, key, value):
-        rv = super().__setitem__(key, value)
+        rv = self._underlying_dict.__setitem__(key, value)
         self._notify_parent_that_i_was_modified()
         return rv
     
     def __delitem__(self, key):
-        rv = super().__delitem__(key)
+        rv = self._underlying_dict.__delitem__(key)
         self._notify_parent_that_i_was_modified()
         return rv   
 
     def update(self, *args, **kwargs):
-        rv = super().update(*args, **kwargs)
+        rv = self._underlying_dict.update(*args, **kwargs)
         self._notify_parent_that_i_was_modified()
         return rv
 
     def pop(self, key, *args):
-        rv = super().pop(key, *args)
+        rv = self._underlying_dict.pop(key, *args)
         self._notify_parent_that_i_was_modified()
         return rv
     
     def clear(self):
-        rv = super().clear()
+        rv = self._underlying_dict.clear()
         self._notify_parent_that_i_was_modified()
         return rv   
 
