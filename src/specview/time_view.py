@@ -1,15 +1,22 @@
-from PyQt5.QtCore import QPointF
+from PyQt5.QtCore import QPointF, QObject, QRunnable, QThread, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
 import pyqtgraph as pg
 import numpy as np
+import sigmf
 
-from .spec_types import TimeSeries
 from .app_state import AppState, CaptureID, AnnotationID
 from .loaded_file_mgmt import LoadedDictAction
 from .roi_select_viewboxes import IntervalSelectViewBox
 from .ui_constants import INTERVAL_ROI_COLOR
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
+import threading
+
+from .chunkwise_compute import ChunkwiseComputedArray
+import logging
+log = logging.getLogger(__name__)
+
+MAX_TIME_POINTS_TO_DISPLAY = 100_000
 
 class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -31,6 +38,10 @@ class TimeView(QWidget):
         self._time_plot.addItem(self._time_crosshair_x, ignoreBounds=True)
 
         self._time_plot.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
+
+        self._time_plot.sigRangeChanged.connect(self._on_range_changed)
+
+        self._selected_capture_id: CaptureID|None = None
 
         self._time_interval: tuple[float,float]|None = None
 
@@ -59,6 +70,8 @@ class TimeView(QWidget):
             roi_dimensions=ROIDimensions.TIME,
         )
 
+        self._data_update_in_progress: TimeViewUpdaterWorker|None = None
+
         self._connect_app_signals()
 
     def _get_app_state(self) -> AppState:
@@ -77,14 +90,27 @@ class TimeView(QWidget):
         #app_state.selected_channel_changed.connect(self._on_selected_channel_changed)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
-        app_state = self._get_app_state()
-        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
-        tser, sgram = app_state.load_capture_data(
-            loaded_capture_dict.parent_loadedfile.file_id,
-            loaded_capture_dict.capture_idx_in_file,
-            channel_idx=0)   # TODO: handle multiple channels
-        self.setDisplayedTimeSeries(tser)
+
+        # save which capture we are displaying
+        self._selected_capture_id = capture_id  
         self._annotation_manager.set_current_capture(capture_id)
+
+        app_state = self._get_app_state()
+        capture = app_state.get_capture_by_id(capture_id)
+        loaded_file = capture.parent_loadedfile
+
+        sample_rate_Hz = loaded_file.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate_Hz is None or sample_rate_Hz <= 0:
+            log.error("Invalid or missing sample rate. Cannot display time data.")
+            return
+
+        start_time_sec = 0.0
+        end_time_sec = min(capture.num_samples / sample_rate_Hz, MAX_TIME_POINTS_TO_DISPLAY / sample_rate_Hz)
+
+        # Set the time range to show up to MAX_TIME_POINTS_TO_DISPLAY samples
+        #  this will cause the _on_range_changed to be called, which will
+        #  trigger loading of the data in the background
+        self._time_plot.setXRange(start_time_sec, end_time_sec)
 
     def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
         self._annotation_manager.on_annotation_changed(annotation_id, action)
@@ -105,6 +131,20 @@ class TimeView(QWidget):
         #        duration_sec = t_hi_sec - t_lo_sec
         #        buffer_sec = duration_sec*0.05
         #        self._time_plot.setXRange(t_lo_sec-buffer_sec, t_hi_sec+buffer_sec)
+
+    #def _on_range_changed(self, *args, **kwargs):
+    #    print(f"timeview: on_range_changed: {args=}, {kwargs=}")
+
+    def _on_range_changed(self, plot_widget:pg.PlotWidget, the_range:tuple[tuple[float,float], tuple[float,float]]):
+        x_range, y_range = the_range
+        x_min_sec, x_max_sec = x_range
+        y_min, y_max = y_range
+        #plot_widget.setYRange(-1.1, 1.1)  # keep y range fixed, TODO: this is probably not the best way to do this
+        print(f"timeview: on_range_changed: {x_min_sec=}, {x_max_sec=}, {y_min=}, {y_max=}")
+
+        # TODO: enforce maximum zoom-out here?
+
+        self._update_displayed_data(x_min_sec, x_max_sec)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
         #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
@@ -133,10 +173,115 @@ class TimeView(QWidget):
             y = self._time_series.data[chan,:].imag,
         )
 
+    def _set_plot_data(self, array_data: np.ndarray, true_start_idx_relto_capture: int):
 
-    def setDisplayedTimeSeries(self, tser: TimeSeries):
-        self._time_series = tser
-        self._redisplay()
+        chan = 0 # TODO: pick out the right channel
 
-        # TODO: emit event saying data has changed, zoom to right portion of data
+        print(f"set_plot_data: {array_data.shape=}, {chan=}, {true_start_idx_relto_capture=}, in thread {QThread.currentThread()}")
 
+        capture = self._get_app_state().get_capture_by_id(self._selected_capture_id)
+        if not capture:
+            return
+        
+        sample_rate_Hz = capture.parent_loadedfile.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate_Hz is None or sample_rate_Hz <= 0:    
+            return  
+
+        num_samples = array_data.shape[0]
+        time_sec_axis = np.arange(true_start_idx_relto_capture, true_start_idx_relto_capture + num_samples) / sample_rate_Hz    
+
+        self._time_plot_curve_i.setData(
+            x = time_sec_axis,
+            y = array_data[:,chan].real,
+        )
+        self._time_plot_curve_q.setData(
+            x = time_sec_axis,
+            y = array_data[:,chan].imag,
+        )
+
+        #self._time_plot.setXRange(time_sec_axis.min(), time_sec_axis.max())
+        #self._time_plot.setYRange(-1.1, 1.1)  # reasonable default for normalized data, TODO: make this based on data extents later?
+
+    def _update_displayed_data(self, x_min_sec:float, x_max_sec:float):
+
+        if self._selected_capture_id is None:
+            return
+
+        if self._data_update_in_progress is not None:
+            self._data_update_in_progress.canceled.set()
+
+        MARGIN_SAMPLES = 1000
+
+        app_state = self._get_app_state()
+        capture = app_state.get_capture_by_id(self._selected_capture_id)
+        if capture is None:
+            return
+        loaded_file = capture.parent_loadedfile
+        sample_rate_Hz = loaded_file.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+
+        start_idx_relto_capture = capture.time_axis.idx_nearest_to_value(x_min_sec) - MARGIN_SAMPLES
+        start_idx_relto_file = max(0, capture.start_sample_idx + start_idx_relto_capture)
+        true_start_idx_relto_capture = start_idx_relto_file - capture.start_sample_idx
+
+        end_idx_relto_capture = capture.time_axis.idx_nearest_to_value(x_max_sec) + MARGIN_SAMPLES
+        end_idx_relto_file = min(capture.start_sample_idx + end_idx_relto_capture, loaded_file.sigmf_file.sample_count)
+
+        runnable = TimeViewUpdaterWorker(
+            cca = loaded_file.get_time_chunkwise_computed_array(),
+            true_start_idx_relto_capture=true_start_idx_relto_capture,
+            start_idx_relto_file=start_idx_relto_file,
+            end_idx_relto_file=end_idx_relto_file,
+            sample_rate_Hz=sample_rate_Hz,
+        )
+        
+        self._data_update_in_progress = runnable
+        runnable.signals.update_data_signal.connect(self._set_plot_data)
+        QApplication.instance().thread_pool.start(runnable)
+        print(f"enqueued runnable")
+
+    
+class TimeViewUpdaterSignals(QObject):
+    update_data_signal = pyqtSignal((np.ndarray, int))
+
+class TimeViewUpdaterWorker(QRunnable):
+    def __init__(self, 
+            cca: ChunkwiseComputedArray,
+            true_start_idx_relto_capture:int,
+            start_idx_relto_file:int,
+            end_idx_relto_file:int,
+            sample_rate_Hz:float,
+        ):
+        super().__init__()
+
+        self._cca = cca
+        self._true_start_idx_relto_capture = true_start_idx_relto_capture
+        self._start_idx_relto_file = start_idx_relto_file
+        self._end_idx_relto_file = end_idx_relto_file
+        self._sample_rate_Hz = sample_rate_Hz
+
+        self.signals = TimeViewUpdaterSignals()
+        self.canceled = threading.Event()
+
+#        self._get_required_data()
+#
+#    def _get_required_data(self):
+#        """
+#        This method runs in the main thread before we've been moved to the thread pool.
+#        From here, we make a copy of any information we need from the TimeView and AppState / Loaded Files.
+#        """
+
+    def run(self):
+        print(f"TimeViewUpdaterWorker running in thread {QThread.currentThread()}")
+        try:
+            array_data = self._cca.get_range_blocking(
+                self._start_idx_relto_file,
+                self._end_idx_relto_file
+            )
+
+            if not self.canceled.is_set():
+                self.signals.update_data_signal.emit( array_data, self._true_start_idx_relto_capture )
+                print(f"emitted update_data_signal")
+            else:
+                print(f"canceled, not emitting update_data_signal") # TODO:remove these prints
+        except:
+            log.exception("Error in TimeViewUpdaterWorker")

@@ -24,6 +24,9 @@ class MonotonicAxis:
             raise ValueError(f"{idx=} is out of range for MonotonicAxis with {self._num_points} points")
         return idx * self._slope + self._intercept
 
+    def value_at_idx_extrapolated(self, idx:int) -> float:
+        return idx * self._slope + self._intercept
+
     def idx_nearest_to_value(self, value:float) -> int:
         idx = int(round((value - self._intercept) / self._slope))
         if idx < 0:

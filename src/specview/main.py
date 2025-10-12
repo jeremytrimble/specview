@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer
+from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QThreadPool
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
@@ -117,6 +117,8 @@ def main():
 
     app = QApplication([])
     app_state = app.app_state = AppState(parent=app)
+    app.thread_pool = QThreadPool()
+    app.thread_pool.setMaxThreadCount(4) # TODO: make configurable?
 
     window = MainWindow()
     window.show() # Windows are hidden by default

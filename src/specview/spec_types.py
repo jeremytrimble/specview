@@ -2,7 +2,10 @@ from dataclasses import dataclass
 import enum
 
 import numpy as np
+
+from specview.loaded_file_mgmt import CaptureID
 from .monotonic_axis import MonotonicAxis
+from .chunkwise_compute import ChunkwiseComputedArray
 
 
 class ComputedDataType(str, enum.Enum):
@@ -10,11 +13,20 @@ class ComputedDataType(str, enum.Enum):
     SPECTROGRAM = "spectrogram" # dimensios are [channel, time, freq]
 
 
+# TODO: delete these types
 @dataclass
 class TimeSeries:
     time_sec: MonotonicAxis    # timestamps, same length as first dimension of data
     channels: list[str] # list of channels in this capture
     data: np.ndarray # [channel, time]
+    cdtype: ComputedDataType = ComputedDataType.TIME_SERIES
+
+@dataclass
+class TimeSeries2:
+    capture_id: CaptureID
+    time_sec: MonotonicAxis      # timestamps, same length as first dimension of data
+    channels: list[str]          # list of channels in this capture
+    cca: ChunkwiseComputedArray # [channel, time], relative to ENTIRE FILE, not just capture
     cdtype: ComputedDataType = ComputedDataType.TIME_SERIES
 
 

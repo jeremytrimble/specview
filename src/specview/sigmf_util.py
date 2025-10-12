@@ -1,4 +1,5 @@
 import sigmf
+import numpy as np
 
 def get_annotation_time_bound_relative_to_current_capture(adict: dict, current_capture_idx:int, sigmf_file: sigmf.SigMFFile, return_none_if_disjoint:bool=True ) -> tuple[float,float]|None:
 
@@ -48,3 +49,14 @@ def get_annotation_time_bound_relative_to_current_capture(adict: dict, current_c
             return None
 
     return start_time_sec, end_time_sec
+
+def sigmf_type_to_numpy_dtype( sigmf_type:str ) -> np.dtype:
+    """Convert a SigMF datatype string to a NumPy dtype."""
+    # TODO: support more data types in the future
+    mapping = {
+        "cf32_le": np.dtype(np.complex64),
+        "cf64_le": np.dtype(np.complex128),
+    }
+    if sigmf_type not in mapping:
+        raise ValueError(f"Unsupported SigMF datatype: {sigmf_type}")
+    return mapping[sigmf_type]  

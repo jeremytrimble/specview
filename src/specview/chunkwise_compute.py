@@ -25,8 +25,17 @@ chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble",
 RangeComputedCallback = typing.Callable[["ChunkwiseComputedArray", int, int, np.ndarray], None]
 
 class ChunkwiseComputedArray:
+    # TODO: XXX this needs a better implementation that cannot hang the caller
+    # turns out we need to load data from a QRunnable anyway so there is no need to be callback-based
     def get_range_blocking(self, start: int, stop: int) -> npt.NDArray:
-        raise NotImplementedError("Must be implemented in subclass")
+        evt = threading.Event()
+        saved = {}
+        def cb(array: ChunkwiseComputedArray, start_idx: int, end_idx: int, array_data: np.ndarray):
+            saved["data"] = array_data
+            evt.set()
+        self.get_range_callback(start, stop, cb)
+        evt.wait()
+        return saved["data"]
 
     def get_range_callback(self, start: int, stop: int, cb: RangeComputedCallback) -> None:
         raise NotImplementedError("Must be implemented in subclass")
@@ -73,33 +82,33 @@ class TimeDomainComputationType(IntEnum):
     FM_DEMOD = 4
     #AM_DEMOD = 5
 
-@dataclass
+@dataclass(frozen=True)
 class TimeDomainComputationSpec(abc.ABC):
     computation_type: TimeDomainComputationType
     def get_cache_tag_tuples(self) -> list[tuple[str, typing.Any]]:
         return [("computation_type", str(self.computation_type))]
 
-@dataclass
+@dataclass(frozen=True)
 class RawTimeDomainComputationSpec(TimeDomainComputationSpec):
     computation_type: TimeDomainComputationType = TimeDomainComputationType.RAW
 
-@dataclass
+@dataclass(frozen=True)
 class MagnitudeTimeDomainComputationSpec(TimeDomainComputationSpec):
     computation_type: TimeDomainComputationType = TimeDomainComputationType.MAGNITUDE_DB
 
-@dataclass
+@dataclass(frozen=True)
 class RealComponentTimeDomainComputationSpec(TimeDomainComputationSpec):
     computation_type: TimeDomainComputationType = TimeDomainComputationType.REAL
 
-@dataclass
+@dataclass(frozen=True)
 class ImagComponentTimeDomainComputationSpec(TimeDomainComputationSpec):
     computation_type: TimeDomainComputationType = TimeDomainComputationType.IMAG
 
-@dataclass
+@dataclass(frozen=True)
 class FMDemodTimeDomainComputationSpec(TimeDomainComputationSpec):
     computation_type: TimeDomainComputationType = TimeDomainComputationType.FM_DEMOD
 
-#@dataclass
+#@dataclass(frozen=True)
 #class AMDemodTimeDomainComputationSpec(TimeDomainComputationSpec):
 #    computation_type: TimeDomainComputationType = TimeDomainComputationType.AM_DEMOD
 #    #TODO: are there any other parameters we want here?

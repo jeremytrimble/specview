@@ -3,9 +3,21 @@ from __future__ import annotations
 import typing
 from pathlib import Path
 import enum
+import numpy as np
 import sigmf
-from .sigmf_util import get_annotation_time_bound_relative_to_current_capture
+#from sigmf.sigmffile import dtype_info as sigmf_dtype_info
+from .sigmf_util import get_annotation_time_bound_relative_to_current_capture, sigmf_type_to_numpy_dtype
 from .monotonic_axis import MonotonicAxis
+
+from .chunkwise_compute import (
+    TimeDomainChunkwiseComputedArray,
+    TimeDomainComputationSpec,
+    RawTimeDomainComputationSpec, 
+
+    FrequencyDomainChunkwiseComputedArray,
+    FrequencyDomainComputationSpec,
+)
+
 
 import random
 rnd = random.Random(42)
@@ -493,6 +505,11 @@ class LoadedFile:
 
         self._sigmf_file: sigmf.SigMFFile = sigmf.sigmffile.fromfile(file_path)
         self._has_unsaved_changes = False
+
+        # "CCAs": Chunkwise Computed Arrays
+        self._time_ccas: dict[TimeDomainComputationSpec, TimeDomainChunkwiseComputedArray] = {}
+        self._freq_ccas: dict[FrequencyDomainComputationSpec, FrequencyDomainChunkwiseComputedArray] = {}
+
         self._file_path: Path = Path(self._sigmf_file.data_file)  # This is the path to the .sigmf-data file
         self._file_id: FileID = loaded_file_counter.get_next_id()
 
@@ -619,6 +636,22 @@ class LoadedFile:
         for cap in self._capture_id_to_capture.values():
             del self._parent_loaded_files._capture_id_to_capture[cap.capture_id]
         self._capture_id_to_capture.clear()
+
+    def get_time_chunkwise_computed_array(self, comp_spec: TimeDomainComputationSpec = RawTimeDomainComputationSpec()) -> TimeDomainChunkwiseComputedArray:
+        if comp_spec not in self._time_ccas:
+            sample_dtype: np.dtype = sigmf_type_to_numpy_dtype( self.sigmf_file.get_global_info()[sigmf.SigMFFile.DATATYPE_KEY] ) 
+            print(f"{sample_dtype=}")
+            num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
+
+            cca = TimeDomainChunkwiseComputedArray(
+                signal_file = self.sigmf_file.data_file,
+                signal_file_datatype = sample_dtype,
+                comp_spec= comp_spec,
+                num_channels=num_channels,
+            )
+            self._time_ccas[comp_spec] = cca
+
+        return self._time_ccas[comp_spec]
 
 class LoadedCaptureDict(dict):
     @classmethod
