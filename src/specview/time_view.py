@@ -16,7 +16,7 @@ from .chunkwise_compute import ChunkwiseComputedArray
 import logging
 log = logging.getLogger(__name__)
 
-MAX_TIME_POINTS_TO_DISPLAY = 100_000
+INITIAL_TIME_POINTS_TO_DISPLAY = 100_000
 
 class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
@@ -105,7 +105,7 @@ class TimeView(QWidget):
             return
 
         start_time_sec = 0.0
-        end_time_sec = min(capture.num_samples / sample_rate_Hz, MAX_TIME_POINTS_TO_DISPLAY / sample_rate_Hz)
+        end_time_sec = min(capture.num_samples / sample_rate_Hz, INITIAL_TIME_POINTS_TO_DISPLAY / sample_rate_Hz)
 
         # Set the time range to show up to MAX_TIME_POINTS_TO_DISPLAY samples
         #  this will cause the _on_range_changed to be called, which will
@@ -138,9 +138,8 @@ class TimeView(QWidget):
     def _on_range_changed(self, plot_widget:pg.PlotWidget, the_range:tuple[tuple[float,float], tuple[float,float]]):
         x_range, y_range = the_range
         x_min_sec, x_max_sec = x_range
-        y_min, y_max = y_range
         #plot_widget.setYRange(-1.1, 1.1)  # keep y range fixed, TODO: this is probably not the best way to do this
-        print(f"timeview: on_range_changed: {x_min_sec=}, {x_max_sec=}, {y_min=}, {y_max=}")
+        print(f"timeview: on_range_changed: {x_min_sec=}, {x_max_sec=}")
 
         # TODO: enforce maximum zoom-out here?
 
@@ -237,9 +236,7 @@ class TimeView(QWidget):
         self._data_update_in_progress = runnable
         runnable.signals.update_data_signal.connect(self._set_plot_data)
         QApplication.instance().thread_pool.start(runnable)
-        print(f"enqueued runnable")
 
-    
 class TimeViewUpdaterSignals(QObject):
     update_data_signal = pyqtSignal((np.ndarray, int))
 
@@ -261,14 +258,6 @@ class TimeViewUpdaterWorker(QRunnable):
 
         self.signals = TimeViewUpdaterSignals()
         self.canceled = threading.Event()
-
-#        self._get_required_data()
-#
-#    def _get_required_data(self):
-#        """
-#        This method runs in the main thread before we've been moved to the thread pool.
-#        From here, we make a copy of any information we need from the TimeView and AppState / Loaded Files.
-#        """
 
     def run(self):
         print(f"TimeViewUpdaterWorker running in thread {QThread.currentThread()}")
