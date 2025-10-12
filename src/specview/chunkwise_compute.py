@@ -38,6 +38,8 @@ class ChunkwiseComputedArray:
     def get_shape_and_dtype(self) -> tuple[tuple[int, ...], np.dtype]:
         raise NotImplementedError("Must be implemented in subclass")
 
+    def get_range_if_available(self, start:int, stop:int) -> npt.NDArray|None:
+        raise NotImplementedError("Must be implemented in subclass")
 
 class CacheManager:
     def __init__(self, base_path: Path):
@@ -538,6 +540,24 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_sample = chunk_index * self._chunk_size_samples
         end_sample = min(start_sample + self._chunk_size_samples, self._output_shape[0])
         return start_sample, end_sample
+
+    def get_range_if_available(self, start:int, stop:int) -> npt.NDArray|None:
+        """
+        Returns the data for the specified range if it has already been computed, or None if it has not.
+        """
+        if start < 0 or stop > self._output_shape[0] or start >= stop:
+            raise ValueError("Invalid range")
+
+        start_chunk = self.map_sample_to_chunk(start)
+        end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
+
+        for chunk_index in range(start_chunk, end_chunk + 1):
+            if not self._chunk_bitmap.is_chunk_set(chunk_index):
+                return None
+
+        # create the view of the requested range
+        rv = self._output_memmap[ start:stop, :]
+        return rv
 
     def get_range_blocking(self, start:int, stop:int) -> npt.NDArray|None:
         if start < 0 or stop > self._output_shape[0] or start >= stop:

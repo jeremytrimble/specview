@@ -1,7 +1,10 @@
-from PyQt5.QtCore import QPointF
+from PyQt5.QtCore import QPointF, QRectF, Qt, QObject, pyqtSignal, QRunnable, QThread
 from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
 import numpy as np
+import numpy.typing as npt
 import pyqtgraph as pg
+
+from specview.monotonic_axis import MonotonicAxis
 
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import IntervalSelectViewBox
@@ -9,16 +12,26 @@ from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 from .spec_types import Spectrogram
 from .app_state import AppState, CaptureID, AnnotationID
-from .loaded_file_mgmt import LoadedDictAction
+from .loaded_file_mgmt import LoadedCaptureDict, LoadedDictAction
+
+from .chunkwise_compute import (
+    ChunkwiseComputedArray, FrequencyDomainChunkwiseComputedArray
+)
+
+import logging
+log = logging.getLogger(__name__)
+import threading
 
 class SpecanView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self._sgram : Spectrogram|None = None
-
         # TODO: make MHz ticks display more nicely
         myvb = IntervalSelectViewBox()
+
+        self._selected_capture_id: CaptureID|None = None
+        self._chunk_holder = ChunkHolder()
+        self._chunk_holder.held_data_updated.connect( self._redisplay )
 
         self._freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'}, viewBox=myvb)
         self._freq_plot.setMouseEnabled(x=True, y=True)
@@ -34,7 +47,8 @@ class SpecanView(QWidget):
         self._freq_plot.scene().sigMouseMoved.connect(self._on_scene_mouse_moved)
         self.setLayout(layout)
 
-        self._time_idx = 0
+        self._cursor_time_relto_capture = 0.0
+
         self._time_interval: tuple[float,float]|None = None
         self._freq_interval: tuple[float,float]|None = None
 
@@ -73,14 +87,9 @@ class SpecanView(QWidget):
         app_state.annotation_changed.connect(self._on_annotation_changed)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
-        app_state = self._get_app_state()
-        loaded_capture_dict = app_state.get_capture_by_id(capture_id)
-        tser, sgram = app_state.load_capture_data(
-            loaded_capture_dict.parent_loadedfile.file_id,
-            loaded_capture_dict.capture_idx_in_file,
-            channel_idx=0)   # TODO: handle multiple channels
-        self.setDisplayedSpectrogramData(sgram)
+        self._selected_capture_id = capture_id
         self._annotation_manager.set_current_capture(capture_id)
+        # nothing required yet -- will load data when cursor time changes or time interval changes
 
     def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
         self._annotation_manager.on_annotation_changed(annotation_id, action)
@@ -99,10 +108,10 @@ class SpecanView(QWidget):
         self._redisplay()
 
     def _on_time_cursor_changed(self, t_sec: float):
-        if self._sgram is None:
+        if self._selected_capture_id is None:
             return
 
-        self._time_idx = self._sgram.time_sec.idx_nearest_to_value(t_sec)
+        self._cursor_time_relto_capture = t_sec
         self._redisplay()
 
     def _on_freq_cursor_changed(self, freq_Hz: float):
@@ -120,48 +129,219 @@ class SpecanView(QWidget):
 
     def _redisplay(self):
 
-        if self._sgram is None:
+        if self._selected_capture_id is None:
+            return
+
+        capture:LoadedCaptureDict = self._get_app_state().get_capture_by_id(self._selected_capture_id)
+        if capture is None:
             return
 
         # TODO pull channel, time segment, etc
         chan = 0
 
-        f_Hz = self._sgram.freq_Hz
-        f_lo_Hz = f_Hz.min
-        f_hi_Hz = f_Hz.max
-
         if self._time_interval is None:
-            time_idx = self._time_idx
-            trace = self._sgram.mag_dB[chan,time_idx,:]
+            cursor_time_sec = self._cursor_time_relto_capture
+
+            if cursor_time_sec < 0.0 or cursor_time_sec >= capture.duration_sec:
+                return
+
+            rv = self._chunk_holder.get_data_for(
+                capture_id=self._selected_capture_id,
+                channel=chan,
+                time_relto_capture=cursor_time_sec,
+                duration_sec=None,
+            )
+            if rv is None:
+                # data not yet available, but chunkholder has started a background load and will re-call us when ready
+                return
+
+            arr, freq_axis = rv
+
+            trace = arr[0,:]
         else:
             t_lo_sec, t_hi_sec = self._time_interval
-            t_idx_lo = self._sgram.time_sec.idx_nearest_to_value(t_lo_sec)
-            t_idx_hi = self._sgram.time_sec.idx_nearest_to_value(t_hi_sec)
-            num_traces = t_idx_hi-t_idx_lo + 1
-            duration_sec = self._sgram.time_sec.value_at_idx(t_idx_hi) - self._sgram.time_sec.value_at_idx(t_idx_lo)
 
-            trace_mean = np.sum(np.abs(self._sgram.data[chan, t_idx_lo:t_idx_hi, :]), axis=0)/num_traces
-            trace = 20*np.log10(trace_mean)
-            # TODO: display that this is as measured across duration_sec
+            rv = self._chunk_holder.get_data_for(
+                capture_id=self._selected_capture_id,
+                channel=chan,
+                time_relto_capture=t_lo_sec,
+                duration_sec=t_hi_sec - t_lo_sec,
+            )
+            if rv is None:
+                # data not yet available, but chunkholder has started a background load and will re-call us when ready
+                return
+
+            arr, freq_axis = rv
+            if 0:
+                arr = arr.copy()  # make a copy so we can modify it without affecting the cache
+                arr = np.power((arr/20.0), 10)
+                trace = arr.mean(axis=0, out=arr[0,:])
+                trace = 20 * np.log10(trace)
+            else:
+                trace = arr.mean(axis=0)
 
         self._freq_plot_curve.setData(
-            x = f_Hz.array,
+            x = freq_axis.array,
             y = trace,
         )
         #self._freq_plot.setAspectLocked(False)
 
-        self._freq_plot.setXRange( f_lo_Hz, f_hi_Hz )
+        print(f"specan_view: freq_axis range: {freq_axis.min} to {freq_axis.max}")
+        self._freq_plot.setXRange( freq_axis.min, freq_axis.max )
 
-        trace_lo = round(trace.min(), -1)
-        trace_hi = round(trace.max(), -1)
+        trace_lo = round(trace.min(), -1) - 3
+        trace_hi = round(trace.max(), -1) + 3
         if not np.isfinite(trace_lo):
             trace_lo = -150
         if not np.isfinite(trace_hi):
             trace_hi = +150
+
+        print(f"specan_view: trace range: {trace_lo} to {trace_hi}")
         self._freq_plot.setYRange( trace_lo, trace_hi )
 
         #self._freq_plot.setAspectLocked(True)
 
-    def setDisplayedSpectrogramData(self, sgram:Spectrogram):
-        self._sgram = sgram
-        self._redisplay()
+
+class ChunkHolder(QObject):
+
+    held_data_updated = pyqtSignal()
+
+    """
+    Caches a chunk of data from a ChunkwiseComputedArray to avoid repeated reads when the user is scrolling nearby.
+    """
+    def __init__(self):
+        super().__init__()
+        self._frame_margin = 1000
+
+        self._array: npt.NDArray | None = None
+        self._array_channel: int | None = None
+        self._array_capture_id: CaptureID|None = None
+        self._array_start_time_relto_capture: float = 0.0
+        self._array_delta_t_per_frame: float = 0.0
+        self._array_freq_axis_Hz: MonotonicAxis | None = None
+
+        self._data_update_in_progress: SpecanViewUpdaterWorker | None = None
+
+    def get_data_for(self, capture_id: CaptureID, channel:int, time_relto_capture:float, duration_sec:float|None=None) -> tuple[npt.NDArray, MonotonicAxis]|None:
+
+        if duration_sec is not None and duration_sec <= 0:
+            raise ValueError("duration_sec must be positive or None")
+
+        if self._array is not None and self._array_capture_id == capture_id and self._array_channel == channel:
+            num_frames, _ = self._array.shape
+
+            array_end_time_relto_capture = self._array_start_time_relto_capture + (num_frames-1)*self._array_delta_t_per_frame
+
+            start_frame_idx = None
+            if duration_sec is None:
+                if time_relto_capture >= self._array_start_time_relto_capture and time_relto_capture < array_end_time_relto_capture:
+                    # already have the data we need
+                    start_frame_idx = int( (time_relto_capture - self._array_start_time_relto_capture)/self._array_delta_t_per_frame )
+                    end_frame_idx = start_frame_idx + 1
+            else: # duration_sec is not None
+                if time_relto_capture >= self._array_start_time_relto_capture and (time_relto_capture + duration_sec) < array_end_time_relto_capture:
+                    # already have the data we need
+                    start_frame_idx = int( (time_relto_capture - self._array_start_time_relto_capture)/self._array_delta_t_per_frame )
+                    num_frames_needed = int(duration_sec/self._array_delta_t_per_frame) + 1
+                    end_frame_idx = start_frame_idx + num_frames_needed
+                    del num_frames_needed
+
+            if start_frame_idx is not None:
+                return self._array[start_frame_idx:end_frame_idx, :], self._array_freq_axis_Hz
+
+        # if we got here, we need to load new data
+        # before returning None, we'll fire off a background load of the data we need
+        self._array = None
+
+        if self._data_update_in_progress is not None:
+            self._data_update_in_progress.canceled.set()
+            self._data_update_in_progress = None
+
+        app_state = QApplication.instance().app_state
+        capture :LoadedCaptureDict = app_state.get_capture_by_id(capture_id)
+        if capture is None:
+            return None 
+        loaded_file = capture.parent_loadedfile
+        sample_rate_Hz = loaded_file.sample_rate_Hz
+        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=channel)
+
+        capture_start_time_sec_relto_file = capture.start_sample_idx/sample_rate_Hz
+        data_start_time_sec_relto_file = (capture_start_time_sec_relto_file + time_relto_capture - self._frame_margin * cca.delta_t_per_frame )
+        data_end_time_sec_relto_file = (capture_start_time_sec_relto_file + (time_relto_capture+duration_sec if duration_sec is not None else time_relto_capture) + self._frame_margin * cca.delta_t_per_frame )
+
+        start_idx_relto_file = cca.time_axis.idx_nearest_to_value(data_start_time_sec_relto_file)
+        end_idx_relto_file = cca.time_axis.idx_nearest_to_value(data_end_time_sec_relto_file)   
+
+        true_start_time_sec_relto_file = cca.time_axis.value_at_idx(start_idx_relto_file)
+        true_start_time_sec_relto_capture = true_start_time_sec_relto_file - capture_start_time_sec_relto_file
+
+        runnable = SpecanViewUpdaterWorker(
+            cca=cca,
+            start_idx_relto_file=start_idx_relto_file,
+            end_idx_relto_file=end_idx_relto_file,
+            true_start_time_sec_relto_capture=true_start_time_sec_relto_capture,
+            channel=channel,
+            capture_id=capture_id,
+            center_freq_Hz=capture.center_freq_Hz,
+        )
+        self._data_update_in_progress = runnable
+        runnable.signals.update_data_signal.connect( self._update_held_data )
+        QApplication.instance().thread_pool.start(runnable)
+
+    def _update_held_data(self, array_data: npt.NDArray, start_time_sec_relto_capture: float, channel:int, capture_id:CaptureID, delta_t_per_frame:float, freq_axis_Hz:MonotonicAxis):
+        self._array = array_data
+        self._array_start_time_relto_capture = start_time_sec_relto_capture
+        self._array_channel = channel
+        self._array_capture_id = capture_id
+        self._array_delta_t_per_frame = delta_t_per_frame
+        self._array_freq_axis_Hz = freq_axis_Hz
+
+        self._data_update_in_progress = None
+
+        self.held_data_updated.emit()
+
+class SpecanViewUpdaterSignals(QObject):
+    update_data_signal = pyqtSignal((
+        np.ndarray, float, int, CaptureID, float, MonotonicAxis
+    ))
+
+class SpecanViewUpdaterWorker(QRunnable):
+    def __init__(self, 
+            cca: FrequencyDomainChunkwiseComputedArray,
+            start_idx_relto_file: int,
+            end_idx_relto_file: int,
+            true_start_time_sec_relto_capture: float,
+            channel: int,
+            capture_id: CaptureID,
+            center_freq_Hz: float,
+        ):
+        super().__init__()
+
+        self._cca = cca
+        self._start_idx_relto_file = start_idx_relto_file
+        self._end_idx_relto_file = end_idx_relto_file
+        self._true_start_time_sec_relto_capture = true_start_time_sec_relto_capture
+        self._channel = channel
+        self._capture_id = capture_id
+        self._center_freq_Hz = center_freq_Hz
+
+        self.signals = SpecanViewUpdaterSignals()
+        self.canceled = threading.Event()
+
+    def run(self):
+        print(f"SpecanViewUpdaterWorker running in thread {QThread.currentThread()}")
+        try:
+            array_data = self._cca.get_range_blocking(
+                self._start_idx_relto_file,
+                self._end_idx_relto_file
+            )
+
+            if not self.canceled.is_set():
+                self.signals.update_data_signal.emit( 
+                    array_data, self._true_start_time_sec_relto_capture, self._channel, self._capture_id, self._cca.delta_t_per_frame, self._cca.get_freq_axis_assuming_center_frequency(self._center_freq_Hz)
+                )
+                print(f"specan_view: emitted update_data_signal")
+            else:
+                print(f"canceled, not emitting update_data_signal") # TODO:remove these prints
+        except:
+            log.exception("Error in SpecanViewUpdaterWorker")

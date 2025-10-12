@@ -746,3 +746,7 @@ class LoadedCaptureDict(dict):
     @property
     def center_freq_Hz(self) -> float:
         return self.get(sigmf.SigMFFile.FREQUENCY_KEY, 0.0)
+
+    @property
+    def duration_sec(self) -> float:
+        return self.num_samples / self.parent_loadedfile.sample_rate_Hz
