@@ -332,7 +332,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         if chunks_to_compute:
             log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
             requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
-            ppm = ProcessingPoolManager.get_instance()
+            ppm = self._processing_pool_manager
             ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
         else:
             log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
@@ -595,7 +595,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         if chunks_to_compute:
             log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
             requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
-            ppm = ProcessingPoolManager.get_instance()
+            ppm = self._processing_pool_manager
             ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
         else:
             log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
