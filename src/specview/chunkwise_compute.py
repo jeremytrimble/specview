@@ -466,6 +466,8 @@ class FrequencyDomainComputationSpec(BaseModel):
             scale_to="psd",
         )
 
+DEFAULT_FREQ_COMPUTATION_SPEC = FrequencyDomainComputationSpec()
+
 class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
     def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_samples=1_000_000, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
         if cache_manager is None:
