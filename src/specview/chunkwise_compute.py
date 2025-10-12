@@ -240,9 +240,13 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
+        self._chunk_bitmap = None
         if self._chunk_bitmap_path.exists():
             self._chunk_bitmap: ChunkBitmap = ChunkBitmap.from_file(self._chunk_bitmap_path)
-        else:
+            if len(self._chunk_bitmap) != self._num_output_chunks:
+                # size mismatch, will recreate from scratch below
+                self._chunk_bitmap = None   
+        if self._chunk_bitmap is None:
             self._chunk_bitmap = ChunkBitmap(self._num_output_chunks)
             self._chunk_bitmap.to_file(self._chunk_bitmap_path)
 
@@ -499,9 +503,13 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
+        self._chunk_bitmap = None
         if self._chunk_bitmap_path.exists():
             self._chunk_bitmap: ChunkBitmap = ChunkBitmap.from_file(self._chunk_bitmap_path)
-        else:
+            if len(self._chunk_bitmap) != self._num_output_chunks:
+                # size mismatch, will recreate from scratch below
+                self._chunk_bitmap = None   
+        if self._chunk_bitmap is None:
             self._chunk_bitmap = ChunkBitmap(self._num_output_chunks)
             self._chunk_bitmap.to_file(self._chunk_bitmap_path)
 
