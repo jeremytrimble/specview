@@ -2,7 +2,6 @@ from specview.sigmf_util import get_annotation_time_bound_relative_to_current_ca
 
 import sigmf
 from sigmf import SigMFFile
-from specview.app_state import load_capture, smf_get_field_cap_or_global
 
 import numpy as np
 

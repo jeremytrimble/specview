@@ -7,7 +7,6 @@ from contextlib import contextmanager
 import sigmf
 from pathlib import Path
 import dataclasses
-from specview.disk_cache import dcache
 from specview.loaded_file_mgmt import (
     LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID,
 )
@@ -66,68 +65,6 @@ def make_numpy_array_readonly(arr: np.ndarray) -> np.ndarray:
     Convert a numpy array to a read-only array.
     """
     return arr.setflags(write=False)
-
-@dcache.memoize()
-# note: Path not hashable repeatably
-def load_capture(smf:sigmf.SigMFFile, cap_idx:int, channel_idx:int = 0) -> tuple[TimeSeries, Spectrogram]:
-    with measure_runtime("entirety of load_capture"):
-        #sample_rate_Hz = cap.get(sigmf.SigMFFile.SAMPLE_RATE_KEY) or smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
-
-        #TODO: I think that SAMPLE_RATE_KEY should only be defined in the global fields, not in the capture fields, right?
-        sample_rate_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.SAMPLE_RATE_KEY)
-        center_freq_Hz = smf_get_field_cap_or_global(smf, cap_idx, sigmf.SigMFFile.FREQUENCY_KEY, 0.0)
-
-        # TODO: capture as SpectrogramConfig pa.rameter
-        NFFT = 512 
-        win = scipy.signal.windows.hamming(NFFT)
-        f = scipy.signal.ShortTimeFFT(
-            win=win,
-            hop=len(win)-len(win)//4,
-            fs=sample_rate_Hz,
-            fft_mode="centered",
-        )
-
-        with measure_runtime("timeseries loading"):
-            timedomain_data = smf.read_samples_in_capture(cap_idx)    # TODO: this seems to return a wrong/arbitrary number of samples in some cases
-            make_numpy_array_readonly(timedomain_data)
-            # TODO: handle multiple channels correctly here
-            assert channel_idx == 0, "Only channel 0 is currently supported in load_capture"
-        t = MonotonicAxis(slope=1/sample_rate_Hz, num_points=len(timedomain_data))
-
-        with measure_runtime("FFT"):
-            S = f.stft(timedomain_data)
-            S = S.T # transpose so that now S.shape = [num_times x num_bins]
-        Smag_dB = 20*np.log10(np.abs(S))
-
-        make_numpy_array_readonly(S)
-        make_numpy_array_readonly(Smag_dB)
-
-        tdat = TimeSeries(
-            time_sec=t,
-            channels=["ch0"], #TODO
-            data=timedomain_data.reshape([1,len(timedomain_data)]),
-        )
-
-        spec_freq_Hz = f.f
-        spec_time_sec = f.t(len(timedomain_data))
-
-        #print(f"{Smag_dB.shape=}")
-        #print(f"{len(spec_time_sec)=}, {len(spec_freq_Hz)=}")
-        assert Smag_dB.shape == (len(spec_time_sec), len(spec_freq_Hz))
-
-        spec_freq_Hz = MonotonicAxis( slope = spec_freq_Hz[1] - spec_freq_Hz[0], num_points = len(spec_freq_Hz), intercept = spec_freq_Hz[0] + center_freq_Hz )
-        spec_time_sec = MonotonicAxis( slope = spec_time_sec[1] - spec_time_sec[0], num_points = len(spec_time_sec), intercept = spec_time_sec[0] )
-
-        spec = Spectrogram(
-            channels=["ch0"],    #TODO
-            time_sec = spec_time_sec,
-            freq_Hz=spec_freq_Hz,
-            center_freq_Hz=center_freq_Hz,
-            data = S.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
-            mag_dB = Smag_dB.reshape([1,len(spec_time_sec),len(spec_freq_Hz)]),
-        )
-
-        return tdat, spec
 
 class AppState(QObject):
     #_instance = None
@@ -250,17 +187,6 @@ class AppState(QObject):
             self.set_selected_capture( first_from_dict(loaded_file._capture_id_to_capture).capture_id )
 
         return loaded_file
-
-    
-    def load_capture_data(self, loaded_fileid: str, cap_idx: int, channel_idx: int) -> tuple[TimeSeries, Spectrogram]:
-        """
-        Load a capture from a SigMF file and return the TimeSeries and Spectrogram objects.
-        """
-        loaded_file = self._loaded_files.loaded_file_dict.get(loaded_fileid)
-        if loaded_fileid is None:
-            raise ValueError(f"Loaded file ID {loaded_fileid} not found in loaded files.")
-        tser, sgram = load_capture(loaded_file.sigmf_file, cap_idx, channel_idx)
-        return tser, sgram
 
     def save_current_file(self):
         if self._selected_capture is None:

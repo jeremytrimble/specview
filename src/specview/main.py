@@ -11,9 +11,6 @@ import logging
 from pathlib import Path
 import argparse
 
-
-
-from specview.disk_cache import dcache
 from specview.spec_types import Spectrogram, TimeSeries
 from specview.util import measure_runtime
 
@@ -110,11 +107,6 @@ def main():
     args = parse_args()
     logging.critical(f"args: {args}")
 
-    if args.clear_cache:
-        dcache.clear()
-    dcache.reset('size_limit', 10 *2**30)
-    dcache.cull()
-
     app = QApplication([])
     app_state = app.app_state = AppState(parent=app)
     app.thread_pool = QThreadPool()
@@ -124,7 +116,6 @@ def main():
     window.show() # Windows are hidden by default
     signal.signal(signal.SIGINT, signal.SIG_DFL) # this lets control-C actually close the app
 
-    log.info(f"cache size before: {dcache.volume()}")
     for filepath in args.files:
         filepath = Path(filepath)
         with measure_runtime(f"loading {filepath}"):
