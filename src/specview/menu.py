@@ -58,11 +58,10 @@ def create_annotation_from_selection() -> None:
         return
     
     # Generate a meaningful label
-    label_parts = [f"t={start_time_sec:.3f}s to {end_time_sec:.3f}s"]
     
     # Create metadata dictionary
     metadata: dict[str, float | str] = {
-        sigmf.SigMFFile.LABEL_KEY: ", ".join(label_parts)
+        sigmf.SigMFFile.LABEL_KEY: "Changeme",
     }
     
     # Add frequency bounds if available
@@ -70,8 +69,6 @@ def create_annotation_from_selection() -> None:
         low_freq_Hz, high_freq_Hz = frequency_interval
         metadata[sigmf.SigMFFile.FLO_KEY] = low_freq_Hz
         metadata[sigmf.SigMFFile.FHI_KEY] = high_freq_Hz
-        label_parts.append(f"f={low_freq_Hz/1e6:.3f}MHz to {high_freq_Hz/1e6:.3f}MHz")
-        metadata[sigmf.SigMFFile.LABEL_KEY] = ", ".join(label_parts)
     
     # Create the annotation
     try:
