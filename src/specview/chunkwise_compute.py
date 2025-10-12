@@ -27,15 +27,8 @@ RangeComputedCallback = typing.Callable[["ChunkwiseComputedArray", int, int, np.
 class ChunkwiseComputedArray:
     # TODO: XXX this needs a better implementation that cannot hang the caller
     # turns out we need to load data from a QRunnable anyway so there is no need to be callback-based
-    def get_range_blocking(self, start: int, stop: int) -> npt.NDArray:
-        evt = threading.Event()
-        saved = {}
-        def cb(array: ChunkwiseComputedArray, start_idx: int, end_idx: int, array_data: np.ndarray):
-            saved["data"] = array_data
-            evt.set()
-        self.get_range_callback(start, stop, cb)
-        evt.wait()
-        return saved["data"]
+    def get_range_blocking(self, start:int, stop:int) -> npt.NDArray|None:
+        raise NotImplementedError("Must be implemented in subclass")
 
     def get_range_callback(self, start: int, stop: int, cb: RangeComputedCallback) -> None:
         raise NotImplementedError("Must be implemented in subclass")
@@ -275,6 +268,38 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         end_sample = min(start_sample + self._chunk_size_samples, self._output_shape[0])
         return start_sample, end_sample
 
+    def get_range_blocking(self, start:int, stop:int) -> npt.NDArray|None:
+        if start < 0 or stop > self._output_shape[0] or start >= stop:
+            raise ValueError("Invalid range")
+
+        start_chunk = self.map_sample_to_chunk(start)
+        end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
+
+        chunks_to_compute = []
+        for chunk_index in range(start_chunk, end_chunk + 1):
+            if not self._chunk_bitmap.is_chunk_set(chunk_index):
+                chunks_to_compute.append(chunk_index)
+
+        if chunks_to_compute:
+            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+            ppm = self._processing_pool_manager
+            pool = ppm.get_pool()
+            # perform the computation in the parallel process pool.
+            # once it has completed successfully, we can read the data from the memmap
+            async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
+            async_result.wait()
+            if not async_result.successful():
+                raise RuntimeError("Error during chunk computation") from async_result.value()
+
+            for chunk_index in chunks_to_compute:
+                self._chunk_bitmap.set_chunk(chunk_index)
+            self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+        #else: all chunks were computed already, so just create a view on the mmap
+
+        # create the view of the requested range
+        rv = self._output_memmap[ start:stop, :]
+        return rv
+
     def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
         if start < 0 or stop > self._output_shape[0] or start >= stop:
             raise ValueError("Invalid range")
@@ -501,6 +526,38 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_sample = chunk_index * self._chunk_size_samples
         end_sample = min(start_sample + self._chunk_size_samples, self._output_shape[0])
         return start_sample, end_sample
+
+    def get_range_blocking(self, start:int, stop:int) -> npt.NDArray|None:
+        if start < 0 or stop > self._output_shape[0] or start >= stop:
+            raise ValueError("Invalid range")
+
+        start_chunk = self.map_sample_to_chunk(start)
+        end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
+
+        chunks_to_compute = []
+        for chunk_index in range(start_chunk, end_chunk + 1):
+            if not self._chunk_bitmap.is_chunk_set(chunk_index):
+                chunks_to_compute.append(chunk_index)
+
+        if chunks_to_compute:
+            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+            ppm = self._processing_pool_manager
+            pool = ppm.get_pool()
+            # perform the computation in the parallel process pool.
+            # once it has completed successfully, we can read the data from the memmap
+            async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
+            async_result.wait()
+            if not async_result.successful():
+                raise RuntimeError("Error during chunk computation") from async_result.value()
+
+            for chunk_index in chunks_to_compute:
+                self._chunk_bitmap.set_chunk(chunk_index)
+            self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+        #else: all chunks were computed already, so just create a view on the mmap
+
+        # create the view of the requested range
+        rv = self._output_memmap[ start:stop, :]
+        return rv
 
     def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
         if start < 0 or stop > self._output_shape[0] or start >= stop:
