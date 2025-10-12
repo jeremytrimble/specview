@@ -14,6 +14,8 @@ import struct
 import logging
 from pydantic import BaseModel, Field
 import os
+
+from specview.monotonic_axis import MonotonicAxis
 log = logging.getLogger("chunkwise_compute")
 
 from scipy.signal import ShortTimeFFT
@@ -666,3 +668,26 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         output_memmap = np.memmap(output_file, dtype=output_dtype, mode='r+', shape=output_shape)
         output_memmap[start_frame:end_frame, :] = S.T
         output_memmap.flush()
+
+    @property
+    def time_axis(self) -> MonotonicAxis:
+        num_output_frames, _ = self._output_shape
+        return MonotonicAxis(
+            slope = self._stfft_obj.delta_t,
+            intercept = 0.0,
+            num_points = num_output_frames,
+        )
+            
+    def get_freq_axis_assuming_center_frequency(self, center_freq_Hz:float=0.0) -> MonotonicAxis:
+        # TODO: double check this math -- is center bin correct?
+        lo_freq_Hz = -(self._stfft_obj.delta_f * self._stfft_obj.f_pts//2)
+        lo_freq_Hz += center_freq_Hz
+        return MonotonicAxis(
+            slope = self._stfft_obj.delta_f,
+            intercept = lo_freq_Hz,
+            num_points = self._stfft_obj.f_pts,
+        )
+
+    @property
+    def delta_t_per_frame(self) -> float:
+        return self._stfft_obj.delta_t

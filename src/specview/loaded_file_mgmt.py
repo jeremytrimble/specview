@@ -15,7 +15,7 @@ from .chunkwise_compute import (
     RawTimeDomainComputationSpec, 
 
     FrequencyDomainChunkwiseComputedArray,
-    FrequencyDomainComputationSpec,
+    FrequencyDomainComputationSpec, DEFAULT_FREQ_COMPUTATION_SPEC
 )
 
 
@@ -538,6 +538,19 @@ class LoadedFile:
         return self._sigmf_file
 
     @property
+    def sample_rate_Hz(self) -> float:
+        # TODO: make this used everywhere instead of accessing sigmf_file directly
+        rv = self._sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if rv is None:
+            raise ValueError("Sample rate not found in SigMF file") # we are super broken if this happens
+        return rv
+
+    @property
+    def num_channels(self) -> int:
+        # TODO: make this used everywhere instead of accessing sigmf_file directly
+        return self._sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1)
+
+    @property
     def has_unsaved_changes(self) -> bool:
         return self._has_unsaved_changes
 
@@ -640,7 +653,6 @@ class LoadedFile:
     def get_time_chunkwise_computed_array(self, comp_spec: TimeDomainComputationSpec = RawTimeDomainComputationSpec()) -> TimeDomainChunkwiseComputedArray:
         if comp_spec not in self._time_ccas:
             sample_dtype: np.dtype = sigmf_type_to_numpy_dtype( self.sigmf_file.get_global_info()[sigmf.SigMFFile.DATATYPE_KEY] ) 
-            print(f"{sample_dtype=}")
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = TimeDomainChunkwiseComputedArray(
@@ -652,6 +664,27 @@ class LoadedFile:
             self._time_ccas[comp_spec] = cca
 
         return self._time_ccas[comp_spec]
+
+    def get_freq_chunkwise_computed_array(self, selected_channel:int, comp_spec: FrequencyDomainComputationSpec = DEFAULT_FREQ_COMPUTATION_SPEC) -> FrequencyDomainChunkwiseComputedArray:
+        
+        key = (comp_spec.model_dump_json(), selected_channel)
+
+        if key not in self._freq_ccas:
+            sample_dtype: np.dtype = sigmf_type_to_numpy_dtype( self.sigmf_file.get_global_info()[sigmf.SigMFFile.DATATYPE_KEY] ) 
+            sample_rate_Hz: float = self.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+            num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
+
+            cca = FrequencyDomainChunkwiseComputedArray(
+                signal_file= self.sigmf_file.data_file,
+                signal_file_datatype= sample_dtype,
+                comp_spec= comp_spec,
+                num_input_channels= num_channels,
+                target_output_channel = selected_channel,
+                sample_rate_Hz= sample_rate_Hz,
+            )
+            self._freq_ccas[key] = cca
+
+        return self._freq_ccas[key]
 
 class LoadedCaptureDict(dict):
     @classmethod
@@ -709,3 +742,7 @@ class LoadedCaptureDict(dict):
             raise ValueError(f"Invalid or missing sample rate in capture {self.capture_id}")
 
         return MonotonicAxis(slope=1.0/sample_rate, num_points=self.num_samples, intercept=self.start_sample_idx)
+
+    @property
+    def center_freq_Hz(self) -> float:
+        return self.get(sigmf.SigMFFile.FREQUENCY_KEY, 0.0)
