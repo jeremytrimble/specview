@@ -17,6 +17,7 @@ import os
 log = logging.getLogger("chunkwise_compute")
 
 from scipy.signal import ShortTimeFFT
+import threading
 
 
 chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble", ensure_exists=True)) / "ccache"
@@ -142,32 +143,40 @@ class ChunkBitmap:
     def __init__(self, num_chunks: int):
         self._num_chunks = num_chunks
         self._bitmap = bytearray((num_chunks + 7) // 8)
+        self._cond = threading.Condition()
+
     def set_chunk(self, chunk_index: int) -> None:
-        if 0 <= chunk_index < self._num_chunks:
-            byte_index = chunk_index // 8
-            bit_index = chunk_index % 8
-            self._bitmap[byte_index] |= (1 << bit_index)
+        with self._cond:
+            if 0 <= chunk_index < self._num_chunks:
+                byte_index = chunk_index // 8
+                bit_index = chunk_index % 8
+                self._bitmap[byte_index] |= (1 << bit_index)
     def clear_chunk(self, chunk_index: int) -> None:
-        if 0 <= chunk_index < self._num_chunks:
-            byte_index = chunk_index // 8
-            bit_index = chunk_index % 8
-            self._bitmap[byte_index] &= ~(1 << bit_index)
+        with self._cond:
+            if 0 <= chunk_index < self._num_chunks:
+                byte_index = chunk_index // 8
+                bit_index = chunk_index % 8
+                self._bitmap[byte_index] &= ~(1 << bit_index)
     def is_chunk_set(self, chunk_index: int) -> bool:
-        if 0 <= chunk_index < self._num_chunks:
-            byte_index = chunk_index // 8
-            bit_index = chunk_index % 8
-            return (self._bitmap[byte_index] & (1 << bit_index)) != 0
-        raise IndexError(f"Chunk index {chunk_index} out of range")
+        with self._cond:
+            if 0 <= chunk_index < self._num_chunks:
+                byte_index = chunk_index // 8
+                bit_index = chunk_index % 8
+                return (self._bitmap[byte_index] & (1 << bit_index)) != 0
+            raise IndexError(f"Chunk index {chunk_index} out of range")
     def __len__(self) -> int:
-        return self._num_chunks
-    def __iter__(self):
-        for chunk_index in range(self._num_chunks):
-            yield self.is_chunk_set(chunk_index)
+        with self._cond:
+            return self._num_chunks
+    #def __iter__(self):
+    #    for chunk_index in range(self._num_chunks):
+    #        yield self.is_chunk_set(chunk_index)
     def to_file(self, file_path: Path) -> None:
-        header = struct.pack("<I", self._num_chunks)  # Write number of chunks as uint32
+        with self._cond:
+            header = struct.pack("<I", self._num_chunks)  # Write number of chunks as uint32
+            body = bytes(self._bitmap)
         with open(file_path, 'wb') as f:
             f.write(header)
-            f.write(self._bitmap)
+            f.write(body)
     @classmethod
     def from_file(cls, file_path: Path) -> ChunkBitmap:
         with open(file_path, 'rb') as f:
@@ -180,7 +189,8 @@ class ChunkBitmap:
             if len(bitmap_data) < expected_size:
                 raise ValueError("Invalid bitmap file: bitmap data too short")
             cb = cls(num_chunks)
-            cb._bitmap = bytearray(bitmap_data[:expected_size])
+            with cb._cond:  # shouldn't matter since nobody else has access yet
+                cb._bitmap = bytearray(bitmap_data[:expected_size])
             return cb
 
 def compute_num_chunks(total_samples: int, chunk_size_samples: int) -> int:
