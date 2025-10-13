@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [dependency-groups]
+build = [
+    "pyinstaller>=6.16.0",
+    "specview",
+]
 dev = [
     "mypy>=1.18.2",
     "pytest-cov>=7.0.0",
