@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("SpecView") # TODO: set title with filename(s)
+        self.setWindowTitle("SpecView ALPHA 20251013") # TODO: set title with filename(s)
         #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
