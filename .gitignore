@@ -39,7 +39,7 @@
 tags
 
 # Build (CMake) Directories
-build*
+build*/
 
 # local vimrc files
 vimrc
