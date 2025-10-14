@@ -1,5 +1,9 @@
 name: Build Specview Executables
 
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
