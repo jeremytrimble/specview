@@ -22,7 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --user uv
+          pip install uv
           uv sync --group build --group dev
           uv pip install -e .
 
