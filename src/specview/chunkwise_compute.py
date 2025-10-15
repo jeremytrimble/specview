@@ -306,6 +306,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         # create the view of the requested range
         rv = self._output_memmap[ start:stop, :]
+        rv.setflags(write=False)  # make read-only
         return rv
 
     def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
@@ -329,6 +330,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
             # create the view of the requested range
             rv = self._output_memmap[ start:stop, :]
+            rv.setflags(write=False)  # make read-only
 
             # Invoke the callback
             cb(self, start, stop, rv)
