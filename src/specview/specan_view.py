@@ -172,13 +172,10 @@ class SpecanView(QWidget):
                 return
 
             arr, freq_axis = rv
-            if 0:
-                arr = arr.copy()  # make a copy so we can modify it without affecting the cache
-                arr = np.power((arr/20.0), 10)
-                trace = arr.mean(axis=0, out=arr[0,:])
-                trace = 20 * np.log10(trace)
-            else:
-                trace = arr.mean(axis=0)
+
+            arr = np.power(10, (arr/20.0))
+            trace = arr.mean(axis=0, out=arr[0,:])
+            trace = 20 * np.log10(trace)
 
         self._freq_plot_curve.setData(
             x = freq_axis.array,
