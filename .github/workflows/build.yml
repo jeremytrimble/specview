@@ -35,5 +35,4 @@ jobs:
         with:
           name: specview-${{ runner.os }}
           path: |
-            dist/main.exe
-            dist/main
+            dist/*
