@@ -33,7 +33,7 @@ class SpecanView(QWidget):
         self._chunk_holder = ChunkHolder()
         self._chunk_holder.held_data_updated.connect( self._redisplay )
 
-        self._freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [MHz]'}, viewBox=myvb)
+        self._freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [Hz]'}, viewBox=myvb)
         self._freq_plot.setMouseEnabled(x=True, y=True)
         self._freq_plot_curve = self._freq_plot.plot([]) 
 
@@ -118,7 +118,6 @@ class SpecanView(QWidget):
         self._freq_crosshair_x.setPos(freq_Hz)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
-        #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
         if self._freq_plot.sceneBoundingRect().contains(pos):
             mousePoint = self._freq_plot.getViewBox().mapSceneToView(pos)
             freq_Hz = mousePoint.x()
@@ -183,7 +182,6 @@ class SpecanView(QWidget):
         )
         #self._freq_plot.setAspectLocked(False)
 
-        print(f"specan_view: freq_axis range: {freq_axis.min} to {freq_axis.max}")
         self._freq_plot.setXRange( freq_axis.min, freq_axis.max )
 
         trace_lo = round(trace.min(), -1) - 3
@@ -193,7 +191,6 @@ class SpecanView(QWidget):
         if not np.isfinite(trace_hi):
             trace_hi = +150
 
-        print(f"specan_view: trace range: {trace_lo} to {trace_hi}")
         self._freq_plot.setYRange( trace_lo, trace_hi )
 
         #self._freq_plot.setAspectLocked(True)
@@ -326,7 +323,6 @@ class SpecanViewUpdaterWorker(QRunnable):
         self.canceled = threading.Event()
 
     def run(self):
-        print(f"SpecanViewUpdaterWorker running in thread {QThread.currentThread()}")
         try:
             array_data = self._cca.get_range_blocking(
                 self._start_idx_relto_file,
@@ -337,8 +333,5 @@ class SpecanViewUpdaterWorker(QRunnable):
                 self.signals.update_data_signal.emit( 
                     array_data, self._true_start_time_sec_relto_capture, self._channel, self._capture_id, self._cca.delta_t_per_frame, self._cca.get_freq_axis_assuming_center_frequency(self._center_freq_Hz)
                 )
-                print(f"specan_view: emitted update_data_signal")
-            else:
-                print(f"canceled, not emitting update_data_signal") # TODO:remove these prints
         except:
             log.exception("Error in SpecanViewUpdaterWorker")

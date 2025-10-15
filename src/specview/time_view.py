@@ -24,7 +24,7 @@ class TimeView(QWidget):
 
         myvb = IntervalSelectViewBox()
 
-        self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [microseconds]'}, viewBox=myvb)
+        self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [seconds]'}, viewBox=myvb)
         self._time_plot.setMouseEnabled(x=True, y=True)
         self._time_plot.setYRange(-1.1, 1.1)
 
@@ -132,21 +132,16 @@ class TimeView(QWidget):
         #        buffer_sec = duration_sec*0.05
         #        self._time_plot.setXRange(t_lo_sec-buffer_sec, t_hi_sec+buffer_sec)
 
-    #def _on_range_changed(self, *args, **kwargs):
-    #    print(f"timeview: on_range_changed: {args=}, {kwargs=}")
-
     def _on_range_changed(self, plot_widget:pg.PlotWidget, the_range:tuple[tuple[float,float], tuple[float,float]]):
         x_range, y_range = the_range
         x_min_sec, x_max_sec = x_range
         #plot_widget.setYRange(-1.1, 1.1)  # keep y range fixed, TODO: this is probably not the best way to do this
-        print(f"timeview: on_range_changed: {x_min_sec=}, {x_max_sec=}")
 
         # TODO: enforce maximum zoom-out here?
 
         self._update_displayed_data(x_min_sec, x_max_sec)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
-        #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
         if self._time_plot.sceneBoundingRect().contains(pos):
             mousePoint = self._time_plot.getViewBox().mapSceneToView(pos)
             time_sec = mousePoint.x()
@@ -175,8 +170,6 @@ class TimeView(QWidget):
     def _set_plot_data(self, array_data: np.ndarray, true_start_idx_relto_capture: int):
 
         chan = 0 # TODO: pick out the right channel
-
-        print(f"set_plot_data: {array_data.shape=}, {chan=}, {true_start_idx_relto_capture=}, in thread {QThread.currentThread()}")
 
         capture = self._get_app_state().get_capture_by_id(self._selected_capture_id)
         if not capture:
@@ -260,7 +253,6 @@ class TimeViewUpdaterWorker(QRunnable):
         self.canceled = threading.Event()
 
     def run(self):
-        print(f"TimeViewUpdaterWorker running in thread {QThread.currentThread()}")
         try:
             array_data = self._cca.get_range_blocking(
                 self._start_idx_relto_file,
@@ -269,8 +261,5 @@ class TimeViewUpdaterWorker(QRunnable):
 
             if not self.canceled.is_set():
                 self.signals.update_data_signal.emit( array_data, self._true_start_idx_relto_capture )
-                print(f"emitted update_data_signal")
-            else:
-                print(f"canceled, not emitting update_data_signal") # TODO:remove these prints
         except:
             log.exception("Error in TimeViewUpdaterWorker")
