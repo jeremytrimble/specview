@@ -33,7 +33,7 @@ class WaterfallView(QWidget):
         waterfall_layout = QHBoxLayout()
 
         # Waterfall plot
-        self._waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [MHz]'}, viewBox=myvb)
+        self._waterfall = pg.PlotWidget(labels={'left': 'Time [s]', 'bottom': 'Frequency [Hz]'}, viewBox=myvb)
         self._waterfall.plotItem.getViewBox().invertY(True)
         self._imageitem = pg.ImageItem(axisOrder='row-major')
         self._waterfall.addItem(self._imageitem)
@@ -95,7 +95,6 @@ class WaterfallView(QWidget):
         return QApplication.instance().app_state
 
     def _waterfall_roi_set(self, region: tuple[float, float] | None):
-        #print(f"{region=}")
         if region is None:
             self._get_app_state().set_frequency_interval(None)
             self._get_app_state().set_time_interval(None)
@@ -115,7 +114,6 @@ class WaterfallView(QWidget):
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
 
         app_state.annotation_changed.connect(self._on_annotation_changed)
-        print("WaterfallView connected to app_state.annotation_changed")
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
         self._current_capture_id = capture_id
@@ -165,8 +163,6 @@ class WaterfallView(QWidget):
         x_range, y_range = the_range
         y_min_sec, y_max_sec = y_range
 
-        print(f"waterfall: on_range_changed: {y_min_sec=}, {y_max_sec=}")
-
         # TODO: enforce maximum zoom-out here?
 
         self._update_displayed_data(y_min_sec, y_max_sec)
@@ -200,7 +196,6 @@ class WaterfallView(QWidget):
         self._freq_crosshair_x.setPos(f_Hz)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
-        #print(f"on_scene_mouse_moved: {args=}, {kwargs=}")
         if self._waterfall.sceneBoundingRect().contains(pos):
             mousePoint = self._waterfall.getViewBox().mapSceneToView(pos)
             freq_Hz = mousePoint.x()
@@ -235,8 +230,6 @@ class WaterfallView(QWidget):
         f_hi_Hz = freq_axis.max
         time_lo_sec = true_start_time_sec_relto_capture
         time_hi_sec = time_lo_sec + num_frames * cca.delta_t_per_frame
-
-        print(f"_set_plot_data: {array_data.shape=}, {f_lo_Hz=}, {f_hi_Hz=}, {time_lo_sec=}, {time_hi_sec=}, {true_start_time_sec_relto_capture=}")
 
         wf_rect = QRectF(
             f_lo_Hz,
@@ -282,7 +275,6 @@ class WaterfallView(QWidget):
 
         true_start_time_sec_relto_file = cca.time_axis.value_at_idx(start_idx_relto_file)
         true_start_time_sec_relto_capture = true_start_time_sec_relto_file - capture_start_time_sec_relto_file
-        print(f"wf: {true_start_time_sec_relto_capture=}")
 
         runnable = WaterfallViewUpdaterWorker(
             cca=cca,
@@ -317,7 +309,6 @@ class WaterfallViewUpdaterWorker(QRunnable):
         self.canceled = threading.Event()
 
     def run(self):
-        print(f"WaterfallViewUpdaterWorker running in thread {QThread.currentThread()}")
         try:
             array_data = self._cca.get_range_blocking(
                 self._start_idx_relto_file,
@@ -326,8 +317,5 @@ class WaterfallViewUpdaterWorker(QRunnable):
 
             if not self.canceled.is_set():
                 self.signals.update_data_signal.emit( array_data, self._true_start_time_sec_relto_capture )
-                print(f"emitted update_data_signal")
-            else:
-                print(f"canceled, not emitting update_data_signal") # TODO:remove these prints
         except:
             log.exception("Error in WaterfallViewUpdaterWorker")

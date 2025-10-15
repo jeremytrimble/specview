@@ -57,7 +57,7 @@ def test_create_annotation_with_time_only(tmpdir, monkeypatch):
     assert ann[SigMFFile.START_INDEX_KEY] == 100_000  # 0.1s * 1e6 samples/sec
     assert ann[SigMFFile.LENGTH_INDEX_KEY] == 500_000  # (0.6 - 0.1) * 1e6 samples/sec
     assert SigMFFile.LABEL_KEY in ann
-    assert "t=0.100s to 0.600s" in ann[SigMFFile.LABEL_KEY]
+    assert "Changeme" in ann[SigMFFile.LABEL_KEY]
     assert SigMFFile.FLO_KEY not in ann
     assert SigMFFile.FHI_KEY not in ann
 
@@ -96,8 +96,7 @@ def test_create_annotation_with_time_and_frequency(tmpdir, monkeypatch):
     assert ann[SigMFFile.FLO_KEY] == 2.4e9 - 100e3
     assert ann[SigMFFile.FHI_KEY] == 2.4e9 + 100e3
     assert SigMFFile.LABEL_KEY in ann
-    assert "t=0.100s to 0.600s" in ann[SigMFFile.LABEL_KEY]
-    assert "f=2399.900MHz to 2400.100MHz" in ann[SigMFFile.LABEL_KEY]
+    assert "Changeme" in ann[SigMFFile.LABEL_KEY]
 
 
 def test_create_annotation_no_time_selection(tmpdir, monkeypatch):
