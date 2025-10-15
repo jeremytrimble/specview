@@ -503,7 +503,8 @@ class LoadedFile:
         # sigmf_file is the SigMFFile object loaded from that file
         self._parent_loaded_files = parent_loaded_files
 
-        self._sigmf_file: sigmf.SigMFFile = sigmf.sigmffile.fromfile(file_path)
+        # TODO: checksum computation is skipped to improve load time -- verify checksum in background?
+        self._sigmf_file: sigmf.SigMFFile = sigmf.sigmffile.fromfile(file_path, skip_checksum=True)
         self._has_unsaved_changes = False
 
         # "CCAs": Chunkwise Computed Arrays
