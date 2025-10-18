@@ -125,14 +125,43 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     annotations_menu = QMenu("&Annotations", menu_bar)
     annotations_menu.addAction(annotation_from_selection)
     
-    #view_menu = QMenu("&View", menu_bar)
-    #view_menu.addAction("Toggle &Fullscreen", lambda: print("Toggle Fullscreen action triggered"))
+    # View menu for toggling plot visibility
+    view_menu = QMenu("&View", menu_bar)
+    
+    # Get reference to main window to access dock widgets
+    # Create toggle actions for each dock widget
+    time_view_action = parent.time_dock.toggleViewAction()
+    time_view_action.setText("&Time View")
+    view_menu.addAction(time_view_action)
+    
+    specan_view_action = parent.specan_dock.toggleViewAction()
+    specan_view_action.setText("&Spectrum Analyzer")
+    view_menu.addAction(specan_view_action)
+    
+    waterfall_view_action = parent.waterfall_dock.toggleViewAction()
+    waterfall_view_action.setText("&Waterfall")
+    view_menu.addAction(waterfall_view_action)
+    
+    annotation_view_action = parent.annotation_dock.toggleViewAction()
+    annotation_view_action.setText("&Annotations")
+    view_menu.addAction(annotation_view_action)
+    
+    captures_view_action = parent.captures_dock.toggleViewAction()
+    captures_view_action.setText("&Captures")
+    view_menu.addAction(captures_view_action)
+    
+    view_menu.addSeparator()
+    
+    # Add reset layout action
+    reset_layout_action = QAction(text="Reset Layout", parent=parent)
+    reset_layout_action.triggered.connect(parent.reset_layout)
+    view_menu.addAction(reset_layout_action)
     
     help_menu = QMenu("&Help", menu_bar)
     help_menu.addAction("&About", lambda: AboutDialog(parent).exec_())
 
     menu_bar.addMenu(file_menu)
-    #menu_bar.addMenu(view_menu)
+    menu_bar.addMenu(view_menu)
     menu_bar.addMenu(annotations_menu)
     menu_bar.addMenu(help_menu)
 
