@@ -22,6 +22,7 @@ from .app_state import AppState
 from .monotonic_axis import MonotonicAxis
 from .annotations_table import AnnotationsTable
 from .captures_panel import CapturesPanel
+from .ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
 
 log = logging.getLogger("specview")
 
@@ -105,7 +106,7 @@ class MainWindow(QMainWindow):
         
     def _load_window_state(self):
         """Load window geometry and dock widget state from settings."""
-        settings = QSettings("SpecView", "SpecView")
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
         
         # Restore window geometry
         geometry = settings.value("geometry")
@@ -121,14 +122,14 @@ class MainWindow(QMainWindow):
     
     def _save_window_state(self):
         """Save window geometry and dock widget state to settings."""
-        settings = QSettings("SpecView", "SpecView")
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
         settings.setValue("geometry", self.saveGeometry())
         settings.setValue("windowState", self.saveState())
     
     def reset_layout(self):
         """Reset dock widgets to default layout."""
         # Clear settings
-        settings = QSettings("SpecView", "SpecView")
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
         settings.remove("geometry")
         settings.remove("windowState")
         

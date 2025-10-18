@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QSettings, QThreadPool
 from specview.main import MainWindow
 from specview.app_state import AppState
+from specview.ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def app_with_window(qtbot):
         app.thread_pool.setMaxThreadCount(4)
     
     # Clear settings before test
-    settings = QSettings("SpecView", "SpecView")
+    settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
     settings.clear()
     
     # Create window
