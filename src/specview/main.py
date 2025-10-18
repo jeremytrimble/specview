@@ -42,7 +42,7 @@ class MainWindow(QMainWindow):
 
         # Get version info and set window title
         version_info = get_version_info()
-        self.setWindowTitle(f"SpecView v{version_info.version}")
+        self.setWindowTitle(f"Specview v{version_info.version}")
         #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
