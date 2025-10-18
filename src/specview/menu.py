@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import QMenu, QMenuBar, QFileDialog
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QApplication, QAction
 
+from .about_dialog import AboutDialog
+
 from .app_state import AppState
 
 import logging
@@ -127,7 +129,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     #view_menu.addAction("Toggle &Fullscreen", lambda: print("Toggle Fullscreen action triggered"))
     
     help_menu = QMenu("&Help", menu_bar)
-    help_menu.addAction("&About", lambda: print("About action triggered"))
+    help_menu.addAction("&About", lambda: AboutDialog(parent).exec_())
 
     menu_bar.addMenu(file_menu)
     #menu_bar.addMenu(view_menu)

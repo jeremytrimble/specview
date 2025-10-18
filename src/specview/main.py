@@ -10,7 +10,9 @@ import logging
 
 from pathlib import Path
 import argparse
+import sys
 
+from specview.version import get_version_info
 from specview.util import measure_runtime
 
 from .time_view import TimeView
@@ -38,7 +40,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("SpecView ALPHA 20251013") # TODO: set title with filename(s)
+        # Get version info and set window title
+        version_info = get_version_info()
+        self.setWindowTitle(f"SpecView v{version_info.version}")
         #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
@@ -102,6 +106,7 @@ def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                       default="WARNING", help="Set the logging level (default: INFO)")
+    parser.add_argument("--version", action="version", version=str(get_version_info()))
     parser.add_argument("files", nargs="*", default=[], help="Path to SigMF file(s) to open.")
 
     return parser.parse_args()
