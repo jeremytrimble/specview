@@ -150,6 +150,16 @@ class WaterfallView(QWidget):
 
         self._waterfall.setRange(rect=rect, padding=0.0)
 
+        self._waterfall.setLimits(
+            xMin=freq_axis.min,
+            xMax=freq_axis.max,
+            yMin=0,
+            yMax=capture_duration_sec,
+            maxYRange=5.0,  # TODO: is this reasonable?
+        )
+
+        # TODO: compute exents of data in thread and set color limits appropriately
+
         #self._waterfall.setRange(
 
         #    xRange=(freq_axis.min, freq_axis.max),

@@ -191,6 +191,13 @@ class TimeView(QWidget):
             y = array_data[:,chan].imag,
         )
 
+        self._time_plot.setLimits(
+            xMin=0.0,
+            xMax=capture.duration_sec,
+            maxXRange=5.0, #TODO: is this reasonable?
+            # TODO: compute exents of data in thread and set limits appropriately
+        )
+
         #self._time_plot.setXRange(time_sec_axis.min(), time_sec_axis.max())
         #self._time_plot.setYRange(-1.1, 1.1)  # reasonable default for normalized data, TODO: make this based on data extents later?
 

@@ -181,18 +181,23 @@ class SpecanView(QWidget):
         )
         #self._freq_plot.setAspectLocked(False)
 
-        self._freq_plot.setXRange( freq_axis.min, freq_axis.max )
+        MIN_dB = -180
+        MAX_dB = 70
 
         trace_lo = round(trace.min(), -1) - 3
         trace_hi = round(trace.max(), -1) + 3
-        if not np.isfinite(trace_lo):
-            trace_lo = -150
-        if not np.isfinite(trace_hi):
-            trace_hi = +150
+        if not np.isfinite(trace_lo) or trace_lo < MIN_dB:
+            trace_lo = MIN_dB
+        if not np.isfinite(trace_hi) or trace_hi > MAX_dB:
+            trace_hi = MAX_dB
 
-        self._freq_plot.setYRange( trace_lo, trace_hi )
-
-        #self._freq_plot.setAspectLocked(True)
+        self._freq_plot.setLimits(
+            xMin=freq_axis.min,
+            xMax=freq_axis.max,
+            yMin=MIN_dB,
+            yMax=MAX_dB,
+            # TODO: compute limits of data in thread and set limits appropriately
+        )
 
 
 class ChunkHolder(QObject):
