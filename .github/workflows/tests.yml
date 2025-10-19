@@ -33,5 +33,7 @@ jobs:
         uv pip install -e .
         
     - name: Run tests with pytest
+      env:
+        QT_QPA_PLATFORM: offscreen
       run: |
         uv run pytest tests/
