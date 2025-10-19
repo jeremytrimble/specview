@@ -60,6 +60,10 @@ class MainWindow(QMainWindow):
         self.annotation_dock = self._create_dock_widget("Annotations", self.annotation_table)
         self.captures_dock = self._create_dock_widget("Captures", self.captures_panel)
 
+        self.time_dock.sizePolicy().setVerticalStretch(1)
+        self.specan_dock.sizePolicy().setVerticalStretch(1)
+        self.waterfall_dock.sizePolicy().setVerticalStretch(2)
+
         # Set up default dock layout
         self._setup_default_layout()
 
@@ -94,15 +98,15 @@ class MainWindow(QMainWindow):
     def _setup_default_layout(self):
         """Set up the default dock widget layout."""
         # Add docks to main window in default positions
-        self.addDockWidget(Qt.TopDockWidgetArea, self.time_dock)
-        self.addDockWidget(Qt.TopDockWidgetArea, self.specan_dock)
-        self.addDockWidget(Qt.TopDockWidgetArea, self.waterfall_dock)
-        self.addDockWidget(Qt.BottomDockWidgetArea, self.annotation_dock)
-        self.addDockWidget(Qt.BottomDockWidgetArea, self.captures_dock)
-        
-        # Stack them vertically in the top area
-        self.splitDockWidget(self.time_dock, self.specan_dock, Qt.Vertical)
-        self.splitDockWidget(self.specan_dock, self.waterfall_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.time_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.specan_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.waterfall_dock, Qt.Vertical)
+
+        self.addDockWidget(Qt.TopDockWidgetArea, self.captures_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.annotation_dock, Qt.Vertical)
+        self.tabifyDockWidget(self.captures_dock, self.annotation_dock)
+
+        self.resizeDocks([self.time_dock, self.specan_dock, self.waterfall_dock, self.captures_dock, self.annotation_dock], [1, 1, 2, 1,1], Qt.Vertical)
         
     def _load_window_state(self):
         """Load window geometry and dock widget state from settings."""
@@ -140,9 +144,6 @@ class MainWindow(QMainWindow):
         self.removeDockWidget(self.annotation_dock)
         self.removeDockWidget(self.captures_dock)
         
-        # Re-add them in default configuration
-        self._setup_default_layout()
-        
         # Make all docks non-floating (must be after adding them)
         self.time_dock.setFloating(False)
         self.specan_dock.setFloating(False)
@@ -156,6 +157,9 @@ class MainWindow(QMainWindow):
         self.waterfall_dock.show()
         self.annotation_dock.show()
         self.captures_dock.show()
+
+        # Re-add them in default configuration
+        self._setup_default_layout()
         
         # Reset window size
         self.resize(QSize(2000, 1500))
