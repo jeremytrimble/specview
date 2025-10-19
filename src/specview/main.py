@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QThreadPool
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox  # tested with PyQt6==6.7.0
+from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QThreadPool, QSettings
+from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QDockWidget  # tested with PyQt6==6.7.0
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 import signal # TODO: let control-C actually close the app
@@ -22,6 +22,7 @@ from .app_state import AppState
 from .monotonic_axis import MonotonicAxis
 from .annotations_table import AnnotationsTable
 from .captures_panel import CapturesPanel
+from .ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
 
 log = logging.getLogger("specview")
 
@@ -43,12 +44,8 @@ class MainWindow(QMainWindow):
         # Get version info and set window title
         version_info = get_version_info()
         self.setWindowTitle(f"Specview v{version_info.version}")
-        #self.setFixedSize(QSize(1500, 1000)) # window size, starting size should fit on 1920 x 1080
 
         layout = QGridLayout() # overall layout
-
-        self._menubar = self.menuBar()
-        populate_menubar(self._menubar, self)
 
         self.time_view = TimeView(parent=self)
         self.specan_view = SpecanView(parent=self)
@@ -56,22 +53,121 @@ class MainWindow(QMainWindow):
         self.annotation_table = AnnotationsTable(parent=self)
         self.captures_panel = CapturesPanel(parent=self)
 
-        layout.addWidget(self.time_view, 1, 0)
-        layout.addWidget(self.specan_view, 2, 0)
-        layout.addWidget(self.waterfall_view, 3, 0)
-        layout.addWidget(self.annotation_table, 4, 0)
-        layout.addWidget(self.captures_panel, 5, 0)
+        # Create dock widgets for each view
+        self.time_dock = self._create_dock_widget("Time View", self.time_view)
+        self.specan_dock = self._create_dock_widget("Spectrum Analyzer", self.specan_view)
+        self.waterfall_dock = self._create_dock_widget("Waterfall", self.waterfall_view)
+        self.annotation_dock = self._create_dock_widget("Annotations", self.annotation_table)
+        self.captures_dock = self._create_dock_widget("Captures", self.captures_panel)
 
+        self.time_dock.sizePolicy().setVerticalStretch(1)
+        self.specan_dock.sizePolicy().setVerticalStretch(1)
+        self.waterfall_dock.sizePolicy().setVerticalStretch(2)
+
+        # Set up default dock layout
+        self._setup_default_layout()
+
+        # Create a dummy central widget (required by QMainWindow)
         central_widget = QWidget()
-        central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+        central_widget.hide()  # Hide it since we're using docks
+
+        # Populate menu bar after dock widgets are created
+        self._menubar = self.menuBar()
+        populate_menubar(self._menubar, self)
 
         self._statusbar = self.statusBar()
         self._statusbar.showMessage("Ready")  # Initial message in the status bar
 
         self._connect_app_signals()
 
-        self.resize(QSize(2000,1500))
+        # Load saved geometry and state, or use defaults
+        self._load_window_state()
+
+    def _create_dock_widget(self, title: str, widget: QWidget) -> QDockWidget:
+        """Create a dock widget with the given title and widget."""
+        dock = QDockWidget(title, self)
+        dock.setObjectName(title.replace(" ", ""))  # Set object name for state saving
+        dock.setWidget(widget)
+        dock.setAllowedAreas(Qt.AllDockWidgetAreas)
+        dock.setFeatures(QDockWidget.DockWidgetMovable | 
+                        QDockWidget.DockWidgetFloatable | 
+                        QDockWidget.DockWidgetClosable)
+        return dock
+
+    def _setup_default_layout(self):
+        """Set up the default dock widget layout."""
+        # Add docks to main window in default positions
+        self.addDockWidget(Qt.TopDockWidgetArea, self.time_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.specan_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.waterfall_dock, Qt.Vertical)
+
+        self.addDockWidget(Qt.TopDockWidgetArea, self.captures_dock, Qt.Vertical)
+        self.addDockWidget(Qt.TopDockWidgetArea, self.annotation_dock, Qt.Vertical)
+        self.tabifyDockWidget(self.captures_dock, self.annotation_dock)
+
+        self.resizeDocks([self.time_dock, self.specan_dock, self.waterfall_dock, self.captures_dock, self.annotation_dock], [1, 1, 2, 1,1], Qt.Vertical)
+        
+    def _load_window_state(self):
+        """Load window geometry and dock widget state from settings."""
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        
+        # Restore window geometry
+        geometry = settings.value("geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        else:
+            self.resize(QSize(2000, 1500))
+        
+        # Restore dock widget state
+        state = settings.value("windowState")
+        if state is not None:
+            self.restoreState(state)
+    
+    def _save_window_state(self):
+        """Save window geometry and dock widget state to settings."""
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        settings.setValue("geometry", self.saveGeometry())
+        settings.setValue("windowState", self.saveState())
+    
+    def reset_layout(self):
+        """Reset dock widgets to default layout."""
+        # Clear settings
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        settings.remove("geometry")
+        settings.remove("windowState")
+        
+        # Remove all docks
+        self.removeDockWidget(self.time_dock)
+        self.removeDockWidget(self.specan_dock)
+        self.removeDockWidget(self.waterfall_dock)
+        self.removeDockWidget(self.annotation_dock)
+        self.removeDockWidget(self.captures_dock)
+        
+        # Make all docks non-floating (must be after adding them)
+        self.time_dock.setFloating(False)
+        self.specan_dock.setFloating(False)
+        self.waterfall_dock.setFloating(False)
+        self.annotation_dock.setFloating(False)
+        self.captures_dock.setFloating(False)
+        
+        # Show all docks
+        self.time_dock.show()
+        self.specan_dock.show()
+        self.waterfall_dock.show()
+        self.annotation_dock.show()
+        self.captures_dock.show()
+
+        # Re-add them in default configuration
+        self._setup_default_layout()
+        
+        # Reset window size
+        self.resize(QSize(2000, 1500))
+    
+    def closeEvent(self, event):
+        """Save state before closing."""
+        self._save_window_state()
+        super().closeEvent(event)
 
     def _connect_app_signals(self):
         app_state = QApplication.instance().app_state
