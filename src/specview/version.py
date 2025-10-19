@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict
 
 # Single source of truth for the version
-__version__ = "0.0.1a"  #PEP 440 compliant version string 0.0.1 ALPHA
+__version__ = "0.0.1a1"  # PEP 440 compliant version string: 0.0.1 ALPHA 1
 
 @dataclass
 class VersionInfo:
