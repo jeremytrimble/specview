@@ -761,7 +761,7 @@ wheels = [
 [[package]]
 name = "specview"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "numpy" },
     { name = "platformdirs" },
@@ -800,13 +800,13 @@ requires-dist = [
 [package.metadata.requires-dev]
 build = [
     { name = "pyinstaller", specifier = ">=6.16.0" },
-    { name = "specview", virtual = "." },
+    { name = "specview", editable = "." },
 ]
 dev = [
     { name = "mypy", specifier = ">=1.18.2" },
     { name = "pytest", specifier = ">=8.4.1" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "specview", virtual = "." },
+    { name = "specview", editable = "." },
 ]
 
 [[package]]

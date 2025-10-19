@@ -24,7 +24,6 @@ jobs:
         run: |
           pip install uv
           uv sync --group build --group dev
-          uv pip install -e .
 
       - name: Build with PyInstaller
         run: |
