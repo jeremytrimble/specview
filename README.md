@@ -3,7 +3,6 @@ To build with pyinstaller, run the following from the root directory of this rep
 
 ```
 uv sync --group build --group dev
-uv pip install -e .
 uv run pyinstaller --clean specview.spec
 ```
 

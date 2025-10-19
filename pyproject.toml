@@ -35,3 +35,10 @@ addopts = "--cov=src/specview --cov-report=term --cov-report=html"
 testpaths = [
     "tests"
 ]
+
+# Declare a build backend so that uv sync --group dev causes specview to be installed editably
+[build-system]
+requires = ["uv_build>=0.9.4,<0.10.0"]
+build-backend = "uv_build"
+
+# TODO: make the build backend generate the version info for a wheel file

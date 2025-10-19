@@ -38,8 +38,7 @@
 # ctags files
 tags
 
-# Build (CMake) Directories
-build*/
+build/
 
 # local vimrc files
 vimrc
@@ -50,3 +49,6 @@ dist/
 
 !.gitignore
 !.github
+
+# generated version info file
+src/specview/version_info.json
