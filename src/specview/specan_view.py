@@ -10,12 +10,11 @@ from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import IntervalSelectViewBox
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
-from .spec_types import Spectrogram
 from .app_state import AppState, CaptureID, AnnotationID
 from .loaded_file_mgmt import LoadedCaptureDict, LoadedDictAction
 
 from .chunkwise_compute import (
-    ChunkwiseComputedArray, FrequencyDomainChunkwiseComputedArray
+    FrequencyDomainChunkwiseComputedArray
 )
 
 import logging

@@ -3,44 +3,6 @@ import enum
 
 import numpy as np
 
-from specview.loaded_file_mgmt import CaptureID
-from .monotonic_axis import MonotonicAxis
-from .chunkwise_compute import ChunkwiseComputedArray
-
-
-class ComputedDataType(str, enum.Enum):
-    TIME_SERIES = "time-series" # dimensions are [channel, time]
-    SPECTROGRAM = "spectrogram" # dimensios are [channel, time, freq]
-
-
-# TODO: delete these types
-@dataclass
-class TimeSeries:
-    time_sec: MonotonicAxis    # timestamps, same length as first dimension of data
-    channels: list[str] # list of channels in this capture
-    data: np.ndarray # [channel, time]
-    cdtype: ComputedDataType = ComputedDataType.TIME_SERIES
-
-@dataclass
-class TimeSeries2:
-    capture_id: CaptureID
-    time_sec: MonotonicAxis      # timestamps, same length as first dimension of data
-    channels: list[str]          # list of channels in this capture
-    cca: ChunkwiseComputedArray # [channel, time], relative to ENTIRE FILE, not just capture
-    cdtype: ComputedDataType = ComputedDataType.TIME_SERIES
-
-
-@dataclass
-class Spectrogram:
-    channels: list[str] # list of channels in this capture
-    time_sec: MonotonicAxis    # timestamps, same length as first dimension of data
-    freq_Hz: MonotonicAxis     # frequency, relative to center bin
-    center_freq_Hz: float|None  # tuner center frequency if applicable, or None
-    data: np.ndarray # [channel, time, freq], raw complex values
-    mag_dB: np.ndarray # [channel, time, freq], 20*log10(abs(data))
-    cdtype: ComputedDataType = ComputedDataType.SPECTROGRAM
-
-
 from pydantic import BaseModel, Field
 
 class WindowType(str, enum.Enum):
@@ -57,7 +19,7 @@ class FFTLength(int, enum.Enum):
     N2048 = 2048
     N4096 = 4096
     N8192 = 8192
-    #N16384 = 16384
+    N16384 = 16384
 
 class HopSize(float, enum.Enum):
     HOP_50 = 0.50

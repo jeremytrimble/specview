@@ -13,9 +13,7 @@ from .roi_select_viewboxes import RectSelectViewBox
 
 from .labeled_rect_roi import LabeledRectROI
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
-from .chunkwise_compute import (
-    ChunkwiseComputedArray, FrequencyDomainChunkwiseComputedArray
-)
+from .chunkwise_compute import ChunkwiseComputedArray
 import threading
 
 import logging

@@ -11,7 +11,6 @@ import logging
 from pathlib import Path
 import argparse
 
-from specview.spec_types import Spectrogram, TimeSeries
 from specview.util import measure_runtime
 
 from .time_view import TimeView
@@ -95,17 +94,20 @@ class MainWindow(QMainWindow):
 
 def parse_args():
     parser = argparse.ArgumentParser(prog="specview", description="Display and annotate SigMF files")
-    parser.add_argument("-C", "--clear-cache", default=False, action="store_true", help="Clear cache", dest="clear_cache")
+    parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                      default="WARNING", help="Set the logging level (default: INFO)")
     parser.add_argument("files", nargs="*", default=[], help="Path to SigMF file(s) to open.")
 
     return parser.parse_args()
 
 def main():
-
-    logging.basicConfig(level=logging.DEBUG)
-
     args = parse_args()
-    logging.critical(f"args: {args}")
+
+    # Set up logging with the specified level
+    log_level = getattr(logging, args.log_level)
+    logging.basicConfig(level=log_level)
+
+    log.debug(f"Command line arguments: {args}")
 
     app = QApplication([])
     app_state = app.app_state = AppState(parent=app)
@@ -122,11 +124,6 @@ def main():
             app_state.load_sigmf_file(filepath)
 
     app.exec() # Start the event loop
-
-    #sgram: Spectrogram
-    #window.time_view.setDisplayedTimeSeries(tser)
-    #window.specan_view.setDisplayedSpectrogramData(sgram)
-    #window.waterfall_view.setDisplayedSpectrogramData(sgram)
 
 
 if __name__ == "__main__":

@@ -10,11 +10,7 @@ import dataclasses
 from specview.loaded_file_mgmt import (
     LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID,
 )
-from specview.monotonic_axis import MonotonicAxis
-from specview.spec_types import Spectrogram, TimeSeries
 from specview.util import measure_runtime, first_from_dict
-from specview.smf import smf_get_field_cap_or_global
-import scipy.signal, scipy.signal.windows
 import numpy as np
 
 import logging
