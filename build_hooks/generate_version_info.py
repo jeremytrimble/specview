@@ -20,7 +20,7 @@ def get_git_info() -> str:
         return "unknown"
 
 def get_git_hash() -> str:
-    """Get git version information using git describe."""
+    """Get the current commit hash using 'git rev-parse'."""
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
