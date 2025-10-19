@@ -6,6 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
+import logging
+
+log = logging.getLogger(__name__)
+
 # Single source of truth for the version
 __version__ = "0.0.1a1"  # PEP 440 compliant version string: 0.0.1 ALPHA 1
 
@@ -32,7 +36,8 @@ def _load_version_info() -> Dict[str, str]:
         if version_file.exists():
             with open(version_file) as f:
                 return json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError) as e:
+        log.warning("Failed to load version info from file: {e}")
         pass
     
     # Return development mode values if no version info file exists
