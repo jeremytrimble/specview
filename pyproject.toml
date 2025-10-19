@@ -25,6 +25,7 @@ dev = [
     "mypy>=1.18.2",
     "pytest-cov>=7.0.0",
     "specview",
+    "pytest-qt>=4.5.0",
 ]
 
 [tool.uv.sources]
