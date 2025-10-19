@@ -26,6 +26,12 @@ log = logging.getLogger("specview")
 
 from .menu import populate_menubar
 
+if 0:
+    import warnings
+    # Treat RuntimeWarnings as errors
+    warnings.simplefilter('error', RuntimeWarning)
+
+
 
 # Subclass QMainWindow to customize your application's main window
 class MainWindow(QMainWindow):
