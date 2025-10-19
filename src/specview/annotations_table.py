@@ -5,7 +5,10 @@ from .loaded_file_mgmt import LoadedDictAction, AnnotationID, CaptureID
 
 from .app_state import AppState
 import sigmf
+import logging
 from .util import duration_format, freq_format, parse_time_str, parse_freq_str
+
+log = logging.getLogger(__name__)
 
 # Note: difference between QTableWidget and QTableView is that QTableWidget has
 # its own built-in model, whereas QTableView requires a separate model to be developed
@@ -224,7 +227,7 @@ class AnnotationsModel(QAbstractTableModel):
             self.dataChanged.emit(index, index)
             return True
         except Exception as e:
-            print(f"Error updating annotation: {e}")
+            log.error(f"Error updating annotation: {e}")
             return False
 
 class AnnotationsTable(QWidget):
