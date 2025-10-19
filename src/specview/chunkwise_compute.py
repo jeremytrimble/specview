@@ -14,6 +14,7 @@ import struct
 import logging
 from pydantic import BaseModel, Field
 import os
+import time
 
 from specview.monotonic_axis import MonotonicAxis
 log = logging.getLogger("chunkwise_compute")
@@ -288,16 +289,21 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             if not self._chunk_bitmap.is_chunk_set(chunk_index):
                 chunks_to_compute.append(chunk_index)
 
+        log.debug(f"TimeDomainCCA.get_range_blocking: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+
         if chunks_to_compute:
             requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
             ppm = self._processing_pool_manager
             pool = ppm.get_pool()
             # perform the computation in the parallel process pool.
             # once it has completed successfully, we can read the data from the memmap
+            start_time = time.monotonic()
             async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
             async_result.wait()
+            end_time = time.monotonic()
             if not async_result.successful():
                 raise RuntimeError("Error during chunk computation") from async_result.value()
+            log.debug(f"TimeDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
 
             for chunk_index in chunks_to_compute:
                 self._chunk_bitmap.set_chunk(chunk_index)
@@ -335,6 +341,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             # Invoke the callback
             cb(self, start, stop, rv)
 
+        log.debug(f"TimeDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
         if chunks_to_compute:
             log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
             requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
@@ -573,17 +580,20 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             if not self._chunk_bitmap.is_chunk_set(chunk_index):
                 chunks_to_compute.append(chunk_index)
 
+        log.debug(f"FreqDomainCCA.get_range_blocking: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
         if chunks_to_compute:
             requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
             ppm = self._processing_pool_manager
             pool = ppm.get_pool()
             # perform the computation in the parallel process pool.
             # once it has completed successfully, we can read the data from the memmap
+            start_time = time.monotonic()
             async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
             async_result.wait()
             if not async_result.successful():
                 raise RuntimeError("Error during chunk computation") from async_result.value()
-
+            end_time = time.monotonic()
+            log.debug(f"FreqDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
             for chunk_index in chunks_to_compute:
                 self._chunk_bitmap.set_chunk(chunk_index)
             self._chunk_bitmap.to_file(self._chunk_bitmap_path)
@@ -604,6 +614,8 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         for chunk_index in range(start_chunk, end_chunk + 1):
             if not self._chunk_bitmap.is_chunk_set(chunk_index):
                 chunks_to_compute.append(chunk_index)
+
+        log.debug(f"FreqDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
 
         def on_computation_complete(results_whocares: list[None]) -> None:
             # Mark chunks as computed
