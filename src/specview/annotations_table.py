@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QAbstractTableModel, Qt
+from PyQt5.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout
 
 from .loaded_file_mgmt import LoadedDictAction, AnnotationID, CaptureID
@@ -99,13 +99,15 @@ class AnnotationsModel(QAbstractTableModel):
         annotations_dict = self._get_current_capture_annotations()
         if annotations_dict is None:
             return
+        
+        keys = list(annotations_dict.keys())
+        row = index.row()
+        col = index.column()
+        if row < 0 or row >= len(keys) or col < 0 or col >= self._NUM_COLUMNS:
+            return None
+        annotation = annotations_dict[keys[row]]
+        
         if role == Qt.DisplayRole:
-            keys = list(annotations_dict.keys())
-            row = index.row()
-            col = index.column()
-            if row < 0 or row >= len(keys) or col < 0 or col >= self._NUM_COLUMNS:
-                return None
-            annotation = annotations_dict[keys[row]]
             if col == 0:
                 return annotation.get(sigmf.SigMFFile.LABEL_KEY, "--")
             elif col == 1:
@@ -152,6 +154,43 @@ class AnnotationsModel(QAbstractTableModel):
                     return freq_format(v)
             elif col == 8:
                 return "TODO"   # put more here
+        
+        elif role == Qt.UserRole:
+            # Return raw comparable values for sorting
+            if col == 0:
+                # Label - return string for lexicographic sorting
+                return annotation.get(sigmf.SigMFFile.LABEL_KEY, "")
+            elif col == 1:
+                # Start Time - return numeric value or inf for None
+                v = annotation.get_start_time_sec(self._current_capture_id)
+                return v if v is not None else float('inf')
+            elif col == 2:
+                # End Time - return numeric value or inf for None
+                v = annotation.get_end_time_sec(self._current_capture_id)
+                return v if v is not None else float('inf')
+            elif col == 3:
+                # Duration - return numeric value or inf for None
+                v = annotation.duration_sec
+                return v if v is not None else float('inf')
+            elif col == 4:
+                # Low Freq - return numeric value or inf for None
+                v = annotation.low_frequency_Hz
+                return v if v is not None else float('inf')
+            elif col == 5:
+                # Center Freq - return numeric value or inf for None
+                v = annotation.center_frequency_Hz
+                return v if v is not None else float('inf')
+            elif col == 6:
+                # High Freq - return numeric value or inf for None
+                v = annotation.high_frequency_Hz
+                return v if v is not None else float('inf')
+            elif col == 7:
+                # Bandwidth - return numeric value or inf for None
+                v = annotation.bandwidth_Hz
+                return v if v is not None else float('inf')
+            elif col == 8:
+                # More Info - return string
+                return "TODO"
 
     def setData(self, index, value, role=Qt.EditRole):
         if role != Qt.EditRole:
@@ -235,16 +274,50 @@ class AnnotationsTable(QWidget):
         super().__init__(parent)
         self.table = QTableView(self)
         self.model = AnnotationsModel(self)
-
-        self.table.setModel(self.model)
-
+        
+        # Create and configure proxy model for sorting
+        self.proxy_model = QSortFilterProxyModel(self)
+        self.proxy_model.setSourceModel(self.model)
+        self.proxy_model.setSortRole(Qt.UserRole)
+        self.proxy_model.setDynamicSortFilter(True)
+        
+        self.table.setModel(self.proxy_model)
+        
+        # Enable sorting on the table view
+        self.table.setSortingEnabled(True)
+        
         self.layout = QHBoxLayout()
         self.layout.addWidget(self.table)
         self.setLayout(self.layout)
-
+        
+        # Track current sort column and order for toggling
+        self._current_sort_column = -1
+        self._current_sort_order = Qt.AscendingOrder
+        
+        # Connect header click to custom handler
+        header = self.table.horizontalHeader()
+        header.sectionClicked.connect(self._on_header_clicked)
+        
         self.model.layoutChanged.connect(self.table.resizeColumnsToContents)
 
+    def _on_header_clicked(self, logical_index):
+        """Handle header clicks to toggle sort order."""
+        if logical_index == self._current_sort_column:
+            # Toggle sort order for the same column
+            if self._current_sort_order == Qt.AscendingOrder:
+                self._current_sort_order = Qt.DescendingOrder
+            else:
+                self._current_sort_order = Qt.AscendingOrder
+        else:
+            # New column clicked, default to ascending
+            self._current_sort_column = logical_index
+            self._current_sort_order = Qt.AscendingOrder
+        
+        # Apply the sort
+        self.proxy_model.sort(self._current_sort_column, self._current_sort_order)
+        
+        # Update header sort indicator
+        self.table.horizontalHeader().setSortIndicator(self._current_sort_column, self._current_sort_order)
 
     def get_application(self):
         return self.parent().application
-
