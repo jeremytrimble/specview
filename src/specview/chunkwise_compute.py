@@ -17,11 +17,12 @@ import os
 import time
 
 from specview.monotonic_axis import MonotonicAxis
+from specview.spec_types import STFFTConfig
 log = logging.getLogger("chunkwise_compute")
 
 from scipy.signal import ShortTimeFFT
 import threading
-
+from PyQt5.QtWidgets import QApplication
 
 chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble", ensure_exists=True)) / "ccache"
 
@@ -462,6 +463,11 @@ class FrequencyDomainComputationSpec(BaseModel):
     def get_cache_tag_tuples(self) -> list[tuple[str, typing.Any]]:
         return [("NFFT", str(self.NFFT)), ("win", str(self.win)), ("hop", f"{self.hop.value:.3f}")]
 
+    @classmethod
+    def from_stfft_config(cls, config: "STFFTConfig") -> "FrequencyDomainComputationSpec":
+        """Create a FrequencyDomainComputationSpec from an STFFTConfig."""
+        return cls(NFFT=config.NFFT, win=config.win, hop=config.hop)
+        
     def get_stft_object(self, fs: float) -> ShortTimeFFT:
         # From scipy docs: The stft is represented by a complex-valued matrix
         # S[q,p] where the p-th column represents an FFT with the window

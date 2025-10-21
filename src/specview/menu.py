@@ -3,7 +3,7 @@ from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QApplication, QAction
 
 from .about_dialog import AboutDialog
-
+from .stfft_config_dialog import STFFTConfigDialog
 from .app_state import AppState
 
 import logging
@@ -149,6 +149,13 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     captures_view_action = parent.captures_dock.toggleViewAction()
     captures_view_action.setText("&Captures")
     view_menu.addAction(captures_view_action)
+    
+    view_menu.addSeparator()
+    
+    # Add STFFT settings action
+    stfft_settings_action = QAction(text="STFFT Settings...", parent=parent)
+    stfft_settings_action.triggered.connect(lambda: STFFTConfigDialog(QApplication.instance().app_state, parent).exec_())
+    view_menu.addAction(stfft_settings_action)
     
     view_menu.addSeparator()
     
