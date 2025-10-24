@@ -152,23 +152,24 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     
     view_menu.addSeparator()
     
-    # Add FFT settings action
-    fft_settings_action = QAction(text="FFT Settings...", parent=parent)
-    fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec_())
-    view_menu.addAction(fft_settings_action)
-    
-    view_menu.addSeparator()
-    
     # Add reset layout action
     reset_layout_action = QAction(text="Reset Layout", parent=parent)
     reset_layout_action.triggered.connect(parent.reset_layout)
     view_menu.addAction(reset_layout_action)
-    
+
+    analysis_menu = QMenu("A&nalysis", menu_bar)
+
+    # Add FFT settings action
+    fft_settings_action = QAction(text="FFT Settings...", parent=parent)
+    fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec_())
+    analysis_menu.addAction(fft_settings_action)
+
     help_menu = QMenu("&Help", menu_bar)
     help_menu.addAction("&About", lambda: AboutDialog(parent).exec_())
 
     menu_bar.addMenu(file_menu)
     menu_bar.addMenu(view_menu)
+    menu_bar.addMenu(analysis_menu)
     menu_bar.addMenu(annotations_menu)
     menu_bar.addMenu(help_menu)
 
