@@ -161,6 +161,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
 
     # Add FFT settings action
     fft_settings_action = QAction(text="FFT Settings...", parent=parent)
+    fft_settings_action.setShortcut("Ctrl+F")
     fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec_())
     analysis_menu.addAction(fft_settings_action)
 

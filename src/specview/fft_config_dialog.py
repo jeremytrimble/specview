@@ -9,7 +9,7 @@ class FFTConfigDialog(QDialog):
     def __init__(self, app_state: AppState, parent=None):
         super().__init__(parent)
         self.app_state = app_state
-        self.setWindowTitle("STFFT Configuration")
+        self.setWindowTitle("FFT Settings")
         
         # Create layout
         layout = QVBoxLayout()
