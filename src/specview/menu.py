@@ -164,6 +164,19 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec_())
     analysis_menu.addAction(fft_settings_action)
 
+    analysis_menu.addSeparator()
+
+    # Add FFT size adjustment actions
+    increase_fft_action = QAction(text="More FFT Bins", parent=parent)
+    increase_fft_action.setShortcut("Ctrl++")
+    increase_fft_action.triggered.connect(lambda: QApplication.instance().app_state.increase_fft_size())
+    analysis_menu.addAction(increase_fft_action)
+
+    decrease_fft_action = QAction(text="Less FFT Bins", parent=parent)
+    decrease_fft_action.setShortcut("Ctrl+-")
+    decrease_fft_action.triggered.connect(lambda: QApplication.instance().app_state.decrease_fft_size())
+    analysis_menu.addAction(decrease_fft_action)
+
     help_menu = QMenu("&Help", menu_bar)
     help_menu.addAction("&About", lambda: AboutDialog(parent).exec_())
 

@@ -11,7 +11,7 @@ from specview.loaded_file_mgmt import (
     LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID,
 )
 from specview.util import measure_runtime, first_from_dict
-from specview.chunkwise_compute import FrequencyDomainComputationSpec
+from specview.chunkwise_compute import FrequencyDomainComputationSpec, FFTLength
 import numpy as np
 
 import logging
@@ -212,6 +212,34 @@ class AppState(QObject):
     def get_freq_domain_computation_spec(self) -> FrequencyDomainComputationSpec:
         """Get the frequency domain computation spec from current FFT config."""
         return self._fft_config
+
+    def increase_fft_size(self):
+        """Increase the FFT size to the next available size."""
+        current_config = self._fft_config
+        current_size = current_config.NFFT
+        fft_sizes = list(FFTLength.__members__.values())
+        try:
+            current_idx = fft_sizes.index(current_size)
+            if current_idx < len(fft_sizes) - 1:
+                new_config = current_config.model_copy()
+                new_config.NFFT = fft_sizes[current_idx + 1]
+                self.set_fft_config(new_config)
+        except ValueError:
+            pass
+
+    def decrease_fft_size(self):
+        """Decrease the FFT size to the next smaller size."""
+        current_config = self._fft_config
+        current_size = current_config.NFFT
+        fft_sizes = list(FFTLength.__members__.values())
+        try:
+            current_idx = fft_sizes.index(current_size)
+            if current_idx > 0:
+                new_config = current_config.model_copy()
+                new_config.NFFT = fft_sizes[current_idx - 1]
+                self.set_fft_config(new_config)
+        except ValueError:
+            pass
 
     #def save_as(self, parent):
 
