@@ -13,7 +13,7 @@ from .roi_select_viewboxes import RectSelectViewBox
 
 from .labeled_rect_roi import LabeledRectROI
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
-from .chunkwise_compute import ChunkwiseComputedArray
+from .chunkwise_compute import ChunkwiseComputedArray, FrequencyDomainComputationSpec
 import threading
 
 import logging
@@ -112,6 +112,7 @@ class WaterfallView(QWidget):
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
 
         app_state.annotation_changed.connect(self._on_annotation_changed)
+        app_state.fft_config_changed.connect(self._on_fft_config_changed)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
         self._current_capture_id = capture_id
@@ -126,7 +127,7 @@ class WaterfallView(QWidget):
         chan = 0 # TODO: select channel from somewhere
 
         loaded_file = capture.parent_loadedfile
-        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=chan)
+        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=chan, comp_spec=app_state.get_fft_config())
 
         center_freq_Hz = capture.center_freq_Hz
         sample_rate_Hz = loaded_file.sample_rate_Hz
@@ -175,9 +176,15 @@ class WaterfallView(QWidget):
 
         self._update_displayed_data(y_min_sec, y_max_sec)
 
+    def _on_fft_config_changed(self, fft_config: FrequencyDomainComputationSpec):
+        # FFT config changed, may need to update display
+        # For now, just refresh the displayed data
+        x_range, y_range = self._waterfall.viewRange()
+        y_min_sec, y_max_sec = y_range
+        self._update_displayed_data(y_min_sec, y_max_sec)
+
     def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
         self._annotation_manager.on_annotation_changed(annotation_id, action)
-
 
     def _on_interval_changed(self):
         app_state = self._get_app_state()
@@ -228,7 +235,7 @@ class WaterfallView(QWidget):
 
         chan = 0 # TODO: select channel from somewhere
 
-        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=chan)
+        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=chan, comp_spec=app_state.get_fft_config())
         freq_axis = cca.get_freq_axis_assuming_center_frequency( capture.center_freq_Hz )
         time_axis = cca.time_axis
 
@@ -272,7 +279,7 @@ class WaterfallView(QWidget):
         # TODO: select channel from somewhere
         chan = 0
 
-        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=chan)
+        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=chan, comp_spec=app_state.get_fft_config())
 
         capture_start_time_sec_relto_file = capture.start_sample_idx/sample_rate_Hz
         data_start_time_sec_relto_file = (capture_start_time_sec_relto_file + y_min_sec - MARGIN_FRAMES * cca.delta_t_per_frame )

@@ -667,7 +667,7 @@ class LoadedFile:
 
         return self._time_ccas[comp_spec]
 
-    def get_freq_chunkwise_computed_array(self, selected_channel:int, comp_spec: FrequencyDomainComputationSpec | None = None) -> FrequencyDomainChunkwiseComputedArray:
+    def get_freq_chunkwise_computed_array(self, selected_channel:int, comp_spec: FrequencyDomainComputationSpec | None ) -> FrequencyDomainChunkwiseComputedArray:
         if comp_spec is None:
             # Get config from AppState
             app_state = QApplication.instance().app_state

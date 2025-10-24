@@ -14,7 +14,8 @@ from .app_state import AppState, CaptureID, AnnotationID
 from .loaded_file_mgmt import LoadedCaptureDict, LoadedDictAction
 
 from .chunkwise_compute import (
-    FrequencyDomainChunkwiseComputedArray
+    FrequencyDomainChunkwiseComputedArray,
+    FrequencyDomainComputationSpec
 )
 
 import logging
@@ -84,11 +85,16 @@ class SpecanView(QWidget):
         app_state.frequency_interval_changed.connect(self._on_freq_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
         app_state.annotation_changed.connect(self._on_annotation_changed)
+        app_state.fft_config_changed.connect(self._on_fft_config_changed)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
         self._selected_capture_id = capture_id
         self._annotation_manager.set_current_capture(capture_id)
         # nothing required yet -- will load data when cursor time changes or time interval changes
+
+    def _on_fft_config_changed(self, new_config: FrequencyDomainComputationSpec):
+        self._chunk_holder.clear_saved_data()
+        self._redisplay()
 
     def _on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
         self._annotation_manager.on_annotation_changed(annotation_id, action)
@@ -219,6 +225,9 @@ class ChunkHolder(QObject):
         self._array_freq_axis_Hz: MonotonicAxis | None = None
 
         self._data_update_in_progress: SpecanViewUpdaterWorker | None = None
+    
+    def clear_saved_data(self):
+        self._array = None
 
     def get_data_for(self, capture_id: CaptureID, channel:int, time_relto_capture:float, duration_sec:float|None=None) -> tuple[npt.NDArray, MonotonicAxis]|None:
 
@@ -261,7 +270,7 @@ class ChunkHolder(QObject):
             return None 
         loaded_file = capture.parent_loadedfile
         sample_rate_Hz = loaded_file.sample_rate_Hz
-        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=channel)
+        cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=channel, comp_spec=app_state.get_fft_config())
 
         capture_start_time_sec_relto_file = capture.start_sample_idx/sample_rate_Hz
         data_start_time_sec_relto_file = (capture_start_time_sec_relto_file + time_relto_capture - self._frame_margin * cca.delta_t_per_frame )
