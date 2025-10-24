@@ -11,7 +11,6 @@ from specview.loaded_file_mgmt import (
     LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID,
 )
 from specview.util import measure_runtime, first_from_dict
-from specview.spec_types import STFFTConfig
 from specview.chunkwise_compute import FrequencyDomainComputationSpec
 import numpy as np
 
@@ -69,7 +68,7 @@ class AppState(QObject):
 
     cursor_frequency_changed = pyqtSignal(float, name="cursor_frequency_changed")
     cursor_time_changed      = pyqtSignal(float, name="cursor_time_changed")
-    stfft_config_changed    = pyqtSignal(object, name="stfft_config_changed")  # Emits STFFTConfig
+    fft_config_changed    = pyqtSignal(object, name="fft_config_changed")  # Emits FrequencyDomainComputationSpec
 
     frequency_interval_changed = pyqtSignal( [object], name="frequency_interval_changed") # tuple[float,float]|None
     time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")    # tuple[float,float]|None
@@ -85,8 +84,8 @@ class AppState(QObject):
 
         # Items of state:
         # - set of opened sigmf files
-        
-        self._stfft_config = STFFTConfig()
+
+        self._fft_config = FrequencyDomainComputationSpec()
 
         # - selected sigmf file
         # - selected capture
@@ -198,25 +197,21 @@ class AppState(QObject):
         with measure_runtime(f"Save SigMF File: {smf.data_file}", log_level=logging.CRITICAL):
             meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)["meta_fn"]
             smf.tofile(file_path=meta_filename)
-            
-    def get_stfft_config(self) -> STFFTConfig:
-        """Get the current STFFT configuration."""
-        return self._stfft_config
-        
-    def set_stfft_config(self, config: STFFTConfig):
-        """Set a new STFFT configuration and emit change signal."""
-        if self._stfft_config == config:
+
+    def get_fft_config(self) -> FrequencyDomainComputationSpec:
+        """Get the current FFT configuration."""
+        return self._fft_config
+
+    def set_fft_config(self, config: FrequencyDomainComputationSpec):
+        """Set a new FFT configuration and emit change signal."""
+        if self._fft_config == config:
             return
-        self._stfft_config = config
-        self.stfft_config_changed.emit(self._stfft_config)
-        
+        self._fft_config = config
+        self.fft_config_changed.emit(self._fft_config)
+
     def get_freq_domain_computation_spec(self) -> FrequencyDomainComputationSpec:
-        """Get the frequency domain computation spec from current STFFT config."""
-        return FrequencyDomainComputationSpec(
-            NFFT=self._stfft_config.NFFT,
-            win=self._stfft_config.win,
-            hop=self._stfft_config.hop,
-        )
+        """Get the frequency domain computation spec from current FFT config."""
+        return self._fft_config
 
     #def save_as(self, parent):
 

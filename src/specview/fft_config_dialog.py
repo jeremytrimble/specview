@@ -2,10 +2,10 @@ from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QHBoxLayout
 from PyQt5.QtCore import Qt
 from pyqtschema import WidgetBuilder
 
-from .spec_types import STFFTConfig
 from .app_state import AppState
+from .chunkwise_compute import FrequencyDomainComputationSpec
 
-class STFFTConfigDialog(QDialog):
+class FFTConfigDialog(QDialog):
     def __init__(self, app_state: AppState, parent=None):
         super().__init__(parent)
         self.app_state = app_state
@@ -13,14 +13,14 @@ class STFFTConfigDialog(QDialog):
         
         # Create layout
         layout = QVBoxLayout()
-        
-        # Create form from STFFTConfig model
-        builder = WidgetBuilder(STFFTConfig.model_json_schema())
+
+        # Create form from FrequencyDomainComputationSpec model
+        builder = WidgetBuilder(FrequencyDomainComputationSpec.model_json_schema())
         self.form = builder.create_form()
         layout.addWidget(self.form)
         
         # Set initial values from current config
-        current_config = app_state.get_stfft_config()
+        current_config = app_state.get_fft_config()
         self.form.state = current_config.model_dump()
         
         # Add OK/Cancel buttons
@@ -43,12 +43,12 @@ class STFFTConfigDialog(QDialog):
         try:
             # Get form data and create new config
             form_data = self.form.state
-            new_config = STFFTConfig.model_validate(form_data)
+            new_config = FrequencyDomainComputationSpec.model_validate(form_data)
             
             # Update AppState (this will emit the change signal)
-            self.app_state.set_stfft_config(new_config)
-            
+            self.app_state.set_fft_config(new_config)
+
             super().accept()
         except Exception as e:
             # Form validation failed
-            print(f"Failed to update STFFT config: {e}")
+            print(f"Failed to update FFT config: {e}")

@@ -3,7 +3,7 @@ from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QApplication, QAction
 
 from .about_dialog import AboutDialog
-from .stfft_config_dialog import STFFTConfigDialog
+from .fft_config_dialog import FFTConfigDialog
 from .app_state import AppState
 
 import logging
@@ -152,10 +152,10 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     
     view_menu.addSeparator()
     
-    # Add STFFT settings action
-    stfft_settings_action = QAction(text="STFFT Settings...", parent=parent)
-    stfft_settings_action.triggered.connect(lambda: STFFTConfigDialog(QApplication.instance().app_state, parent).exec_())
-    view_menu.addAction(stfft_settings_action)
+    # Add FFT settings action
+    fft_settings_action = QAction(text="FFT Settings...", parent=parent)
+    fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec_())
+    view_menu.addAction(fft_settings_action)
     
     view_menu.addSeparator()
     
