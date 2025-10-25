@@ -1,9 +1,13 @@
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QHBoxLayout
 from PyQt5.QtCore import Qt
+from pydantic import ValidationError
 from pyqtschema import WidgetBuilder
 
 from .app_state import AppState
 from .chunkwise_compute import FrequencyDomainComputationSpec
+
+import logging
+log = logging.getLogger(__name__)
 
 class FFTConfigDialog(QDialog):
     def __init__(self, app_state: AppState, parent=None):
@@ -49,6 +53,5 @@ class FFTConfigDialog(QDialog):
             self.app_state.set_fft_config(new_config)
 
             super().accept()
-        except Exception as e:
-            # Form validation failed
-            print(f"Failed to update FFT config: {e}")
+        except ValidationError as e:
+            log.exception(f"Failed to update FFT config: {e}")

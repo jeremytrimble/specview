@@ -169,7 +169,7 @@ class WaterfallView(QWidget):
         #)
         
     def _on_range_changed(self, plot_widget:pg.PlotWidget, the_range:tuple[tuple[float,float], tuple[float,float]]):
-        x_range, y_range = the_range
+        _, y_range = the_range
         y_min_sec, y_max_sec = y_range
 
         # TODO: enforce maximum zoom-out here?
@@ -179,7 +179,7 @@ class WaterfallView(QWidget):
     def _on_fft_config_changed(self, fft_config: FrequencyDomainComputationSpec):
         # FFT config changed, may need to update display
         # For now, just refresh the displayed data
-        x_range, y_range = self._waterfall.viewRange()
+        _, y_range = self._waterfall.viewRange()
         y_min_sec, y_max_sec = y_range
         self._update_displayed_data(y_min_sec, y_max_sec)
 
