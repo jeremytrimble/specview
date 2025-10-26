@@ -6,8 +6,8 @@ This module provides reusable utilities for generating test data and files.
 
 import numpy as np
 from pathlib import Path
-from typing import Optional
 from sigmf import SigMFFile
+import sigmf
 import pytest
 
 
@@ -114,6 +114,8 @@ def generate_sigmf_file(
     # Add annotations evenly distributed across the recording
     if num_annotations > 0:
         # Calculate annotation parameters
+        # Each annotation is sized to be 1/3 of the total space divided by number of annotations
+        # This ensures annotations don't overlap and there's spacing between them
         annotation_duration_samples = total_num_samples // (num_annotations * 3)
         spacing = (total_num_samples - annotation_duration_samples) // max(1, num_annotations - 1) if num_annotations > 1 else 0
         
@@ -152,7 +154,6 @@ def test_generate_sigmf_file_basic(tmpdir):
     assert (meta_path.parent / "test.sigmf-data").exists()
     
     # Load and verify the file
-    import sigmf
     smf = sigmf.sigmffile.fromfile(str(meta_path))
     
     # Check global fields
@@ -183,7 +184,6 @@ def test_generate_sigmf_file_custom_parameters(tmpdir):
     assert meta_path.name == "custom.sigmf-meta"
     
     # Load and verify
-    import sigmf
     smf = sigmf.sigmffile.fromfile(str(meta_path))
     
     # Check custom parameters
@@ -202,7 +202,6 @@ def test_generate_sigmf_file_no_annotations(tmpdir):
         num_annotations=0
     )
     
-    import sigmf
     smf = sigmf.sigmffile.fromfile(str(meta_path))
     
     # Should have no annotations
