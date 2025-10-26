@@ -11,6 +11,7 @@ from specview.loaded_file_mgmt import (
     LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID,
 )
 from specview.util import measure_runtime, first_from_dict
+from specview.chunkwise_compute import FrequencyDomainComputationSpec, FFTLength
 import numpy as np
 
 import logging
@@ -67,6 +68,7 @@ class AppState(QObject):
 
     cursor_frequency_changed = pyqtSignal(float, name="cursor_frequency_changed")
     cursor_time_changed      = pyqtSignal(float, name="cursor_time_changed")
+    fft_config_changed    = pyqtSignal(object, name="fft_config_changed")  # Emits FrequencyDomainComputationSpec
 
     frequency_interval_changed = pyqtSignal( [object], name="frequency_interval_changed") # tuple[float,float]|None
     time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")    # tuple[float,float]|None
@@ -82,6 +84,8 @@ class AppState(QObject):
 
         # Items of state:
         # - set of opened sigmf files
+
+        self._fft_config = FrequencyDomainComputationSpec()
 
         # - selected sigmf file
         # - selected capture
@@ -193,6 +197,49 @@ class AppState(QObject):
         with measure_runtime(f"Save SigMF File: {smf.data_file}", log_level=logging.CRITICAL):
             meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)["meta_fn"]
             smf.tofile(file_path=meta_filename)
+
+    def get_fft_config(self) -> FrequencyDomainComputationSpec:
+        """Get the current FFT configuration."""
+        return self._fft_config
+
+    def set_fft_config(self, config: FrequencyDomainComputationSpec):
+        """Set a new FFT configuration and emit change signal."""
+        if self._fft_config == config:
+            return
+        self._fft_config = config
+        self.fft_config_changed.emit(self._fft_config)
+
+    def get_freq_domain_computation_spec(self) -> FrequencyDomainComputationSpec:
+        """Get the frequency domain computation spec from current FFT config."""
+        return self._fft_config
+
+    def increase_fft_size(self):
+        """Increase the FFT size to the next available size."""
+        current_config = self._fft_config
+        current_size = current_config.NFFT
+        fft_sizes = list(FFTLength.__members__.values())
+        try:
+            current_idx = fft_sizes.index(current_size)
+            if current_idx < len(fft_sizes) - 1:
+                new_config = current_config.model_copy()
+                new_config.NFFT = fft_sizes[current_idx + 1]
+                self.set_fft_config(new_config)
+        except ValueError:
+            pass
+
+    def decrease_fft_size(self):
+        """Decrease the FFT size to the next smaller size."""
+        current_config = self._fft_config
+        current_size = current_config.NFFT
+        fft_sizes = list(FFTLength.__members__.values())
+        try:
+            current_idx = fft_sizes.index(current_size)
+            if current_idx > 0:
+                new_config = current_config.model_copy()
+                new_config.NFFT = fft_sizes[current_idx - 1]
+                self.set_fft_config(new_config)
+        except ValueError:
+            pass
 
     #def save_as(self, parent):
 

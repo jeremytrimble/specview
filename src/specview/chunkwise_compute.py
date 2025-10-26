@@ -21,7 +21,7 @@ log = logging.getLogger("chunkwise_compute")
 
 from scipy.signal import ShortTimeFFT
 import threading
-
+from PyQt5.QtWidgets import QApplication
 
 chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble", ensure_exists=True)) / "ccache"
 
@@ -410,7 +410,6 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         with open(output_file, 'r+b') as f:
             f.seek(start_sample * output_dtype.itemsize * num_channels)
             output_data.astype(output_dtype).tofile(f)
-
 
 
 class WindowType(str, Enum):

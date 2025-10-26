@@ -8,6 +8,7 @@ import sigmf
 #from sigmf.sigmffile import dtype_info as sigmf_dtype_info
 from .sigmf_util import get_annotation_time_bound_relative_to_current_capture, sigmf_type_to_numpy_dtype
 from .monotonic_axis import MonotonicAxis
+from PyQt5.QtWidgets import QApplication
 
 from .chunkwise_compute import (
     TimeDomainChunkwiseComputedArray,
@@ -666,8 +667,12 @@ class LoadedFile:
 
         return self._time_ccas[comp_spec]
 
-    def get_freq_chunkwise_computed_array(self, selected_channel:int, comp_spec: FrequencyDomainComputationSpec = DEFAULT_FREQ_COMPUTATION_SPEC) -> FrequencyDomainChunkwiseComputedArray:
-        
+    def get_freq_chunkwise_computed_array(self, selected_channel:int, comp_spec: FrequencyDomainComputationSpec | None ) -> FrequencyDomainChunkwiseComputedArray:
+        if comp_spec is None:
+            # Get config from AppState
+            app_state = QApplication.instance().app_state
+            comp_spec = app_state.get_freq_domain_computation_spec()
+            
         key = (comp_spec.model_dump_json(), selected_channel)
 
         if key not in self._freq_ccas:
