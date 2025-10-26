@@ -22,6 +22,7 @@ and rendering operations have completed before measuring elapsed time.
 import pytest
 import numpy as np
 from pathlib import Path
+from typing import Any, Generator
 from sigmf import SigMFFile
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QSettings, QThreadPool, QTimer, QEventLoop
@@ -34,7 +35,7 @@ from specview.ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
 
 
 def generate_sigmf_file_with_annotations(
-    tmpdir,
+    tmpdir: Path,
     sample_rate: float = 1e6,
     duration_sec: float = 1.0,
     num_annotations: int = 10,
@@ -112,7 +113,7 @@ def generate_sigmf_file_with_annotations(
 
 
 @pytest.fixture
-def app_with_window(qtbot):
+def app_with_window(qtbot: Any) -> Generator[MainWindow, None, None]:
     """
     Create QApplication with MainWindow for testing.
     
@@ -157,7 +158,7 @@ def app_with_window(qtbot):
     settings.clear()
 
 
-def wait_for_rendering_complete(qtbot, timeout_ms: int = 5000):
+def wait_for_rendering_complete(qtbot: Any, timeout_ms: int = 5000) -> None:
     """
     Wait for all pending UI rendering operations to complete.
     
@@ -179,7 +180,7 @@ def wait_for_rendering_complete(qtbot, timeout_ms: int = 5000):
     qtbot.wait(100)
 
 
-def test_sigmf_loading_performance_small_file(app_with_window, qtbot, tmpdir):
+def test_sigmf_loading_performance_small_file(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
     """
     Test performance of loading a small SigMF file with moderate annotations.
     
@@ -227,7 +228,7 @@ def test_sigmf_loading_performance_small_file(app_with_window, qtbot, tmpdir):
     print(f"\nSmall file (1M samples, 10 annotations) loaded in {elapsed_time:.3f}s")
 
 
-def test_sigmf_loading_performance_large_file(app_with_window, qtbot, tmpdir):
+def test_sigmf_loading_performance_large_file(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
     """
     Test performance of loading a larger SigMF file with many annotations.
     
@@ -275,7 +276,7 @@ def test_sigmf_loading_performance_large_file(app_with_window, qtbot, tmpdir):
     print(f"\nLarge file (5M samples, 50 annotations) loaded in {elapsed_time:.3f}s")
 
 
-def test_sigmf_loading_performance_no_annotations(app_with_window, qtbot, tmpdir):
+def test_sigmf_loading_performance_no_annotations(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
     """
     Test performance of loading a SigMF file without annotations.
     
@@ -322,7 +323,7 @@ def test_sigmf_loading_performance_no_annotations(app_with_window, qtbot, tmpdir
     print(f"\nFile without annotations (2M samples) loaded in {elapsed_time:.3f}s")
 
 
-def test_sigmf_loading_performance_many_annotations(app_with_window, qtbot, tmpdir):
+def test_sigmf_loading_performance_many_annotations(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
     """
     Test performance with a high number of annotations.
     
@@ -370,7 +371,7 @@ def test_sigmf_loading_performance_many_annotations(app_with_window, qtbot, tmpd
     print(f"\nFile with many annotations (2M samples, 100 annotations) loaded in {elapsed_time:.3f}s")
 
 
-def test_sigmf_loading_multiple_files_sequentially(app_with_window, qtbot, tmpdir):
+def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
     """
     Test performance of loading multiple files sequentially.
     
