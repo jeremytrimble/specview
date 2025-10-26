@@ -1,5 +1,5 @@
 from __future__ import annotations
-from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer
+from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QSettings
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QFileDialog, QMessageBox
 
 from contextlib import contextmanager
@@ -12,6 +12,7 @@ from specview.loaded_file_mgmt import (
 )
 from specview.util import measure_runtime, first_from_dict
 from specview.chunkwise_compute import FrequencyDomainComputationSpec, FFTLength
+from specview.ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
 import numpy as np
 
 import logging
@@ -78,12 +79,20 @@ class AppState(QObject):
     selected_channel_changed = pyqtSignal(int, name='selected_channel_changed') # emitted with channel_index when a channel is selected
 
     annotation_changed = pyqtSignal([AnnotationID,LoadedDictAction], name='annotation_changed')
+    recent_files_changed = pyqtSignal([], name='recent_files_changed')
+
+    # Maximum number of recent files to track
+    MAX_RECENT_FILES = 10
 
     def __init__(self, parent = ...):
         super().__init__(parent)
 
         # Items of state:
         # - set of opened sigmf files
+
+        # Load recent files from settings
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        self._recent_files = settings.value("recentFiles", [], type=str) or []
 
         self._fft_config = FrequencyDomainComputationSpec()
 
@@ -173,6 +182,39 @@ class AppState(QObject):
         self.selected_capture_changed.emit( self._selected_capture )
         self.selected_channel_changed.emit(0)  # default to channel 0  TODO: do something with channels
 
+    def get_recent_files(self) -> list[str]:
+        """Get the list of recent files."""
+        return self._recent_files
+
+    def add_recent_file(self, file_path: Path | str) -> None:
+        """Add a file to the recent files list."""
+        file_path = str(file_path)
+        
+        # Remove the file if it's already in the list
+        if file_path in self._recent_files:
+            self._recent_files.remove(file_path)
+            
+        # Add the file to the beginning of the list
+        self._recent_files.insert(0, file_path)
+        
+        # Trim the list to maximum size
+        if len(self._recent_files) > self.MAX_RECENT_FILES:
+            self._recent_files = self._recent_files[:self.MAX_RECENT_FILES]
+            
+        # Save to settings
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        settings.setValue("recentFiles", self._recent_files)
+        
+        # Emit signal
+        self.recent_files_changed.emit()
+
+    def clear_recent_files(self) -> None:
+        """Clear the recent files list."""
+        self._recent_files = []
+        settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        settings.setValue("recentFiles", self._recent_files)
+        self.recent_files_changed.emit()
+
     def load_sigmf_file(self, file_path: Path) -> LoadedFile:
         """
         Load a SigMF file and return the LoadedFile object.
@@ -185,6 +227,9 @@ class AppState(QObject):
 
         if is_first_load:
             self.set_selected_capture( first_from_dict(loaded_file._capture_id_to_capture).capture_id )
+
+        # Add to recent files
+        self.add_recent_file(file_path)
 
         return loaded_file
 

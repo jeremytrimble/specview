@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QMenu, QMenuBar, QFileDialog
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QApplication, QAction
+from pathlib import Path
 
 from .about_dialog import AboutDialog
 from .fft_config_dialog import FFTConfigDialog
@@ -109,11 +110,47 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     #save_as_action.setShortcut("Ctrl+Shift+S")
     #save_as_action.triggered.connect(do_save_as)
 
-    # TODO: make the menu do the real things I want
+
+    # Create main file menu
     file_menu = QMenu("&File", menu_bar)
-    #file_menu.addAction("&Open", lambda: present_open_file_dialog(parent))
     file_menu.addAction(open_action)
+    recent_files_menu = QMenu("Recent &Files", file_menu)
+    file_menu.addMenu(recent_files_menu)
+    file_menu.addSeparator()
     file_menu.addAction(save_action)
+
+    
+    # Add clear recent files action
+    clear_recent_files_action = QAction("Clear Recent Files", parent)
+    clear_recent_files_action.triggered.connect(
+        lambda: QApplication.instance().app_state.clear_recent_files()
+    )
+    
+    def update_recent_files_menu():
+        recent_files_menu.clear()
+        recent_files = QApplication.instance().app_state.get_recent_files()
+        
+        for file_path in recent_files:
+            action = QAction(str(Path(file_path).name), parent)
+            action.setData(file_path)
+            action.setStatusTip(file_path)
+            action.triggered.connect(
+                lambda checked, path=file_path: 
+                QApplication.instance().app_state.load_sigmf_file(path)
+            )
+            recent_files_menu.addAction(action)
+            
+        if recent_files:
+            recent_files_menu.addSeparator()
+        recent_files_menu.addAction(clear_recent_files_action)
+    
+    # Connect the signal to update the menu
+    QApplication.instance().app_state.recent_files_changed.connect(update_recent_files_menu)
+    
+    # Initial population of recent files menu
+    update_recent_files_menu()
+    
+    file_menu.addSeparator()
     #file_menu.addAction(save_as_action)
     #file_menu.addSeparator()
     #file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
