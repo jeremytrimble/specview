@@ -92,6 +92,7 @@ class AppState(QObject):
 
         # Load recent files from settings
         settings = QSettings(SETTINGS_ORGANIZATION, SETTINGS_APPLICATION)
+        # TODO: should the type here be `str` or `list[str]`?
         self._recent_files = settings.value("recentFiles", [], type=str) or []
 
         self._fft_config = FrequencyDomainComputationSpec()
