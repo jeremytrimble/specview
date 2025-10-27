@@ -1,25 +1,60 @@
 """
-Performance tests for SigMF file loading and rendering in specview.
-
-This test module measures the performance of loading SigMF files with various
-configurations and ensures that specview maintains acceptable performance 
-characteristics.
-
-Test Methodology:
-1. Generate temporary SigMF files with configurable:
-   - Sample rate
-   - Duration (number of samples)
-   - Number of annotations
-2. Use qtbot to interact with the MainWindow and load files
-3. Measure timing from file load initiation to UI rendering completion
-4. Assert performance meets acceptable thresholds
-5. Clean up temporary files
-
 The test uses Qt's event processing mechanisms to ensure that all UI updates
 and rendering operations have completed before measuring elapsed time.
 """
 
 import pytest
+from dataclasses import dataclass
+from typing import NamedTuple
+
+
+@dataclass
+class TestParams:
+    """Parameters for SigMF file loading performance tests."""
+    name: str
+    sample_rate: float
+    duration_sec: float
+    num_annotations: int
+    max_load_time: float
+    center_frequency: float = 2.4e9
+    description: str = ""
+
+
+# Test case configurations
+TEST_CASES = [
+    TestParams(
+        name="small_file",
+        sample_rate=1e6,
+        duration_sec=1.0,
+        num_annotations=10,
+        max_load_time=2.0,
+        description="Small file with moderate annotations"
+    ),
+    TestParams(
+        name="large_file",
+        sample_rate=1e6,
+        duration_sec=5.0,
+        num_annotations=50,
+        max_load_time=10.0,
+        description="Large file with many annotations"
+    ),
+    TestParams(
+        name="no_annotations",
+        sample_rate=1e6,
+        duration_sec=2.0,
+        num_annotations=0,
+        max_load_time=2.0,
+        description="Moderate file with no annotations"
+    ),
+    TestParams(
+        name="many_annotations",
+        sample_rate=1e6,
+        duration_sec=2.0,
+        num_annotations=600,
+        max_load_time=10.0,
+        description="Moderate file with high annotation count"
+    ),
+]
 import numpy as np
 from pathlib import Path
 from typing import Any, Iterator
@@ -40,7 +75,8 @@ def generate_sigmf_file_with_annotations(
     duration_sec: float = 1.0,
     num_annotations: int = 10,
     center_frequency: float = 2.4e9,
-    filename: str = "test_performance"
+    filename: str = "test_performance",
+    description: str = ""
 ) -> Path:
     """
     Generate a SigMF file with specified parameters for performance testing.
@@ -52,6 +88,7 @@ def generate_sigmf_file_with_annotations(
         num_annotations: Number of annotations to create (default: 10)
         center_frequency: Center frequency in Hz (default: 2.4 GHz)
         filename: Base filename without extension
+        description: Optional description to add to metadata
         
     Returns:
         Path to the generated .sigmf-meta file
@@ -72,7 +109,7 @@ def generate_sigmf_file_with_annotations(
     smf.set_global_field(SigMFFile.DATATYPE_KEY, "cf32_le")
     smf.set_global_field(SigMFFile.SAMPLE_RATE_KEY, sample_rate)
     smf.set_global_field(SigMFFile.DESCRIPTION_KEY, 
-                        f"Performance test file: {num_samples} samples, {num_annotations} annotations")
+                        f"Performance test file: {num_samples} samples, {num_annotations} annotations{' - ' + description if description else ''}")
     
     # Add a single capture segment
     smf.add_capture(start_index=0, metadata={
@@ -172,40 +209,57 @@ def wait_for_rendering_complete(qtbot: Any, timeout_ms: int = 5000) -> None:
     """
     # Process all pending events multiple times to ensure completion
     # This is necessary because some operations may queue additional events
+    print("exiting wait_for_rendering_complete")
     for _ in range(5):
         QApplication.processEvents()
         qtbot.wait(10)  # Small delay between processing rounds
     
     # Additional wait to ensure any delayed rendering completes
     qtbot.wait(100)
+    print("exiting wait_for_rendering_complete")
 
 
-def test_sigmf_loading_performance_small_file(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
+@pytest.mark.parametrize("test_params", TEST_CASES, ids=lambda p: p.name)
+def test_sigmf_loading_performance(
+    app_with_window: MainWindow, 
+    qtbot: Any, 
+    tmpdir: Path, 
+    test_params: TestParams
+) -> None:
     """
-    Test performance of loading a small SigMF file with moderate annotations.
+    Test SigMF file loading performance with various configurations.
     
-    This test measures the time taken to load a 1-second recording with
-    10 annotations and ensures it completes within acceptable time limits.
+    This test runs with different parameters to verify performance across
+    various file sizes and annotation counts. Each configuration has its
+    own performance threshold defined in the test parameters.
     
-    Expected performance: < 2 seconds for loading and initial rendering
+    Args:
+        app_with_window: MainWindow fixture
+        qtbot: Qt bot fixture for UI testing
+        tmpdir: Temporary directory fixture
+        test_params: TestParams instance containing test configuration
     """
     window = app_with_window
     app_state = QApplication.instance().app_state
     
-    # Generate a small test file: 1 second at 1 MHz = 1M samples
+    # Generate test file based on parameters
     sigmf_path = generate_sigmf_file_with_annotations(
         tmpdir=tmpdir,
-        sample_rate=1e6,
-        duration_sec=1.0,
-        num_annotations=10,
-        filename="small_test"
+        sample_rate=test_params.sample_rate,
+        duration_sec=test_params.duration_sec,
+        num_annotations=test_params.num_annotations,
+        center_frequency=test_params.center_frequency,
+        filename=test_params.name,
+        description=test_params.description
     )
+    print(f"Generated file at {sigmf_path}")
     
     # Measure loading time
     start_time = time.monotonic()
     
     # Load the file
     loaded_file = app_state.load_sigmf_file(sigmf_path)
+    print(f"Loading {sigmf_path}")
     
     # Wait for all rendering to complete
     wait_for_rendering_complete(qtbot)
@@ -219,156 +273,13 @@ def test_sigmf_loading_performance_small_file(app_with_window: MainWindow, qtbot
     
     # Verify annotations were loaded
     annotations = loaded_file.get_annotations_dict()
-    assert len(annotations) == 10
+    assert len(annotations) == test_params.num_annotations
     
-    # Performance assertion: should complete within 2 seconds
-    # This is a generous threshold to account for CI environment variations
-    assert elapsed_time < 2.0, f"Loading took {elapsed_time:.3f}s, expected < 2.0s"
+    # Performance assertion
+    assert elapsed_time < test_params.max_load_time, \
+        f"Loading took {elapsed_time:.3f}s, expected < {test_params.max_load_time:.1f}s"
     
-    print(f"\nSmall file (1M samples, 10 annotations) loaded in {elapsed_time:.3f}s")
-
-
-def test_sigmf_loading_performance_large_file(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
-    """
-    Test performance of loading a larger SigMF file with many annotations.
-    
-    This test measures the time taken to load a 5-second recording with
-    50 annotations to ensure specview handles larger files efficiently.
-    
-    Expected performance: < 10 seconds for loading and initial rendering
-    """
-    window = app_with_window
-    app_state = QApplication.instance().app_state
-    
-    # Generate a larger test file: 5 seconds at 1 MHz = 5M samples
-    sigmf_path = generate_sigmf_file_with_annotations(
-        tmpdir=tmpdir,
-        sample_rate=1e6,
-        duration_sec=5.0,
-        num_annotations=50,
-        filename="large_test"
-    )
-    
-    # Measure loading time
-    start_time = time.monotonic()
-    
-    # Load the file
-    loaded_file = app_state.load_sigmf_file(sigmf_path)
-    
-    # Wait for all rendering to complete
-    wait_for_rendering_complete(qtbot)
-    
-    end_time = time.monotonic()
-    elapsed_time = end_time - start_time
-    
-    # Verify file was loaded
-    assert loaded_file is not None
-    assert len(app_state._loaded_files.loaded_file_dict) == 1
-    
-    # Verify annotations were loaded
-    annotations = loaded_file.get_annotations_dict()
-    assert len(annotations) == 50
-    
-    # Performance assertion: should complete within 10 seconds
-    # Larger files naturally take more time
-    assert elapsed_time < 10.0, f"Loading took {elapsed_time:.3f}s, expected < 10.0s"
-    
-    print(f"\nLarge file (5M samples, 50 annotations) loaded in {elapsed_time:.3f}s")
-
-
-def test_sigmf_loading_performance_no_annotations(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
-    """
-    Test performance of loading a SigMF file without annotations.
-    
-    This test measures the baseline performance when no annotations are present,
-    which helps identify annotation-related performance overhead.
-    
-    Expected performance: < 2 seconds for loading and initial rendering
-    """
-    window = app_with_window
-    app_state = QApplication.instance().app_state
-    
-    # Generate test file without annotations
-    sigmf_path = generate_sigmf_file_with_annotations(
-        tmpdir=tmpdir,
-        sample_rate=1e6,
-        duration_sec=2.0,
-        num_annotations=0,  # No annotations
-        filename="no_annotations"
-    )
-    
-    # Measure loading time
-    start_time = time.monotonic()
-    
-    # Load the file
-    loaded_file = app_state.load_sigmf_file(sigmf_path)
-    
-    # Wait for all rendering to complete
-    wait_for_rendering_complete(qtbot)
-    
-    end_time = time.monotonic()
-    elapsed_time = end_time - start_time
-    
-    # Verify file was loaded
-    assert loaded_file is not None
-    assert len(app_state._loaded_files.loaded_file_dict) == 1
-    
-    # Verify no annotations
-    annotations = loaded_file.get_annotations_dict()
-    assert len(annotations) == 0
-    
-    # Performance assertion: should complete within 2 seconds
-    assert elapsed_time < 2.0, f"Loading took {elapsed_time:.3f}s, expected < 2.0s"
-    
-    print(f"\nFile without annotations (2M samples) loaded in {elapsed_time:.3f}s")
-
-
-def test_sigmf_loading_performance_many_annotations(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
-    """
-    Test performance with a high number of annotations.
-    
-    This stress test evaluates how specview handles files with many annotations
-    (100 annotations on a moderate-sized file).
-    
-    Expected performance: < 10 seconds for loading and initial rendering
-    """
-    window = app_with_window
-    app_state = QApplication.instance().app_state
-    
-    # Generate test file with many annotations
-    sigmf_path = generate_sigmf_file_with_annotations(
-        tmpdir=tmpdir,
-        sample_rate=1e6,
-        duration_sec=2.0,
-        num_annotations=100,  # Many annotations
-        filename="many_annotations"
-    )
-    
-    # Measure loading time
-    start_time = time.monotonic()
-    
-    # Load the file
-    loaded_file = app_state.load_sigmf_file(sigmf_path)
-    
-    # Wait for all rendering to complete
-    wait_for_rendering_complete(qtbot)
-    
-    end_time = time.monotonic()
-    elapsed_time = end_time - start_time
-    
-    # Verify file was loaded
-    assert loaded_file is not None
-    assert len(app_state._loaded_files.loaded_file_dict) == 1
-    
-    # Verify all annotations were loaded
-    annotations = loaded_file.get_annotations_dict()
-    assert len(annotations) == 100
-    
-    # Performance assertion: should complete within 10 seconds even with many annotations
-    # This is a stress test with 100 annotations, so we allow more time
-    assert elapsed_time < 10.0, f"Loading took {elapsed_time:.3f}s, expected < 10.0s"
-    
-    print(f"\nFile with many annotations (2M samples, 100 annotations) loaded in {elapsed_time:.3f}s")
+    print(f"\n{test_params.name} loaded in {elapsed_time:.3f}s")
 
 
 def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, qtbot: Any, tmpdir: Path) -> None:
@@ -383,17 +294,33 @@ def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, 
     window = app_with_window
     app_state = QApplication.instance().app_state
     
+    # Create a test params for multiple small files
+    multi_test_params = TestParams(
+        name="multi_test",
+        sample_rate=1e6,
+        duration_sec=1.0,
+        num_annotations=5,
+        max_load_time=2.0,
+        description="Small file for multiple file test"
+    )
+    
     num_files = 3
     load_times = []
     
     for i in range(num_files):
+        # Create a copy of params with unique name for each file
+        file_params = TestParams(
+            **{**multi_test_params.__dict__, "name": f"multi_test_{i}"}
+        )
+        
         # Generate a test file
-        sigmf_path = generate_sigmf_file_with_annotations(
-            tmpdir=tmpdir,
-            sample_rate=1e6,
-            duration_sec=1.0,
-            num_annotations=5,
-            filename=f"multi_test_{i}"
+        sigmf_path = generate_sigmf_file_with_annotations(tmpdir=tmpdir,
+            sample_rate=file_params.sample_rate,
+            duration_sec=file_params.duration_sec,
+            num_annotations=file_params.num_annotations,
+            center_frequency=file_params.center_frequency,
+            filename=file_params.name,
+            description=file_params.description
         )
         
         # Measure loading time for this file
@@ -414,7 +341,8 @@ def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, 
     
     # Performance assertion: each file should load reasonably quickly
     for i, elapsed_time in enumerate(load_times):
-        assert elapsed_time < 2.0, f"File {i} loading took {elapsed_time:.3f}s, expected < 2.0s"
+        assert elapsed_time < multi_test_params.max_load_time, \
+            f"File {i} loading took {elapsed_time:.3f}s, expected < {multi_test_params.max_load_time:.1f}s"
     
     # Check that performance doesn't significantly degrade
     avg_time = sum(load_times) / len(load_times)
