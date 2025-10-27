@@ -224,13 +224,33 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     menu_bar.addMenu(annotations_menu)
     menu_bar.addMenu(help_menu)
 
+def get_open_dir_dialog_initial_dir() -> str:
+    """
+    Get the initial directory for the open file dialog.
+    """
+
+    app_state: AppState = QApplication.instance().app_state
+    capture = app_state._loaded_files.get_capture_from_id( app_state._selected_capture )
+    if capture is not None:
+        file_path = capture.parent_loadedfile.file_path
+        if file_path is not None and file_path.parent.exists():
+            return str(file_path.parent)
+
+    recent_files = app_state.get_recent_files()
+    if len(recent_files) > 0:
+        recent_path = Path(recent_files[0])
+        if recent_path.parent.exists():
+            return str(recent_path.parent)
+
+    return str(Path.cwd())
+
 def present_open_file_dialog(parent):
     """
     Present an open file dialog to the user.
     """
     options = QFileDialog.Options()
     options |= QFileDialog.ReadOnly
-    file_name, _ = QFileDialog.getOpenFileName(parent, "Open SigMF File", "", "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
+    file_name, _ = QFileDialog.getOpenFileName(parent, "Open SigMF File", get_open_dir_dialog_initial_dir(), "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
     if file_name:
         log.info(f"Selected file: {file_name}")
         app_state: AppState = QApplication.instance().app_state
