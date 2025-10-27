@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QMenu, QMenuBar, QFileDialog
 from PyQt5.QtCore import QObject
 from PyQt5.QtWidgets import QApplication, QAction
+from pathlib import Path
 
 from .about_dialog import AboutDialog
 from .fft_config_dialog import FFTConfigDialog
@@ -109,11 +110,47 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     #save_as_action.setShortcut("Ctrl+Shift+S")
     #save_as_action.triggered.connect(do_save_as)
 
-    # TODO: make the menu do the real things I want
+
+    # Create main file menu
     file_menu = QMenu("&File", menu_bar)
-    #file_menu.addAction("&Open", lambda: present_open_file_dialog(parent))
     file_menu.addAction(open_action)
+    recent_files_menu = QMenu("Recent &Files", file_menu)
+    file_menu.addMenu(recent_files_menu)
+    file_menu.addSeparator()
     file_menu.addAction(save_action)
+
+    
+    # Add clear recent files action
+    clear_recent_files_action = QAction("Clear Recent Files", parent)
+    clear_recent_files_action.triggered.connect(
+        lambda: QApplication.instance().app_state.clear_recent_files()
+    )
+    
+    def update_recent_files_menu():
+        recent_files_menu.clear()
+        recent_files = QApplication.instance().app_state.get_recent_files()
+        
+        for file_path in recent_files:
+            action = QAction(str(Path(file_path).name), parent)
+            action.setData(file_path)
+            action.setStatusTip(file_path)
+            action.triggered.connect(
+                lambda checked, path=file_path: 
+                QApplication.instance().app_state.load_sigmf_file(path)
+            )
+            recent_files_menu.addAction(action)
+            
+        if recent_files:
+            recent_files_menu.addSeparator()
+        recent_files_menu.addAction(clear_recent_files_action)
+    
+    # Connect the signal to update the menu
+    QApplication.instance().app_state.recent_files_changed.connect(update_recent_files_menu)
+    
+    # Initial population of recent files menu
+    update_recent_files_menu()
+    
+    file_menu.addSeparator()
     #file_menu.addAction(save_as_action)
     #file_menu.addSeparator()
     #file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
@@ -187,13 +224,33 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     menu_bar.addMenu(annotations_menu)
     menu_bar.addMenu(help_menu)
 
+def get_open_dir_dialog_initial_dir() -> str:
+    """
+    Get the initial directory for the open file dialog.
+    """
+
+    app_state: AppState = QApplication.instance().app_state
+    capture = app_state._loaded_files.get_capture_from_id( app_state._selected_capture )
+    if capture is not None:
+        file_path = capture.parent_loadedfile.file_path
+        if file_path is not None and file_path.parent.exists():
+            return str(file_path.parent)
+
+    recent_files = app_state.get_recent_files()
+    if len(recent_files) > 0:
+        recent_path = Path(recent_files[0])
+        if recent_path.parent.exists():
+            return str(recent_path.parent)
+
+    return str(Path.cwd())
+
 def present_open_file_dialog(parent):
     """
     Present an open file dialog to the user.
     """
     options = QFileDialog.Options()
     options |= QFileDialog.ReadOnly
-    file_name, _ = QFileDialog.getOpenFileName(parent, "Open SigMF File", "", "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
+    file_name, _ = QFileDialog.getOpenFileName(parent, "Open SigMF File", get_open_dir_dialog_initial_dir(), "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
     if file_name:
         log.info(f"Selected file: {file_name}")
         app_state: AppState = QApplication.instance().app_state
