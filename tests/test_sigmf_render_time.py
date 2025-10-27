@@ -48,8 +48,7 @@ def _generate_sigmf(
         "global": {
             "core:datatype": "cf32",  # cf32 -> complex float32
             "core:sample_rate": sample_rate,
-            "core:annotations": {},  # placeholder
-            "core:version": "0.0.1",
+            "core:version": "1.2.5",
         },
         "captures": [
             {
@@ -147,7 +146,7 @@ def _detect_render_complete(window: QtWidgets.QWidget) -> bool:
 @pytest.mark.parametrize("sample_rate,duration_seconds,num_annotations", [
     (1e6, 0.1, 0),
     (2e6, 0.2, 5),
-    (1e5, 1.0, 10),
+    (1e5, 1.0, 1000),
 ])
 def test_sigmf_render_time(qtbot, tmp_path, sample_rate, duration_seconds, num_annotations):
     """
@@ -239,7 +238,7 @@ def test_sigmf_render_time(qtbot, tmp_path, sample_rate, duration_seconds, num_a
 
     # Measure time until rendering heuristics indicate completion
     start = time.perf_counter()
-    timeout_s = 60.0  # generous timeout for CI / slow machines
+    timeout_s = 6.0  # generous timeout for CI / slow machines
 
     try:
         qtbot.waitUntil(lambda: _detect_render_complete(window), timeout=int(timeout_s * 1000))
