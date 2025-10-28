@@ -10,6 +10,7 @@ from .app_state import AppState
 
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import RectSelectViewBox
+from .custom_viewboxes import WaterfallScrollViewBox
 
 from .labeled_rect_roi import LabeledRectROI
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
@@ -25,7 +26,7 @@ class WaterfallView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        myvb = RectSelectViewBox()
+        myvb = WaterfallScrollViewBox()
 
         # Layout container for waterfall related stuff
         waterfall_layout = QHBoxLayout()

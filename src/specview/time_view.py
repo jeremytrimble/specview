@@ -7,6 +7,7 @@ import sigmf
 from .app_state import AppState, CaptureID, AnnotationID
 from .loaded_file_mgmt import LoadedDictAction
 from .roi_select_viewboxes import IntervalSelectViewBox
+from .custom_viewboxes import TimeScrollViewBox
 from .ui_constants import INTERVAL_ROI_COLOR
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
@@ -23,10 +24,10 @@ class TimeView(QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        myvb = IntervalSelectViewBox()
+        myvb = TimeScrollViewBox()
 
         self._time_plot = pg.PlotWidget(labels={'left': 'Amplitude', 'bottom': 'Time [seconds]'}, viewBox=myvb)
-        self._time_plot.setMouseEnabled(x=True, y=True)
+        self._time_plot.setMouseEnabled(x=True, y=False)  # Disable y-axis mouse movement since we want fixed amplitude
         self._time_plot.setYRange(-1.1, 1.1)
 
         self._time_plot_curve_i = self._time_plot.plot([], name="real", pen=pg.mkPen('b')) 

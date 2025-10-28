@@ -8,6 +8,7 @@ from specview.monotonic_axis import MonotonicAxis
 
 from .ui_constants import INTERVAL_ROI_COLOR
 from .roi_select_viewboxes import IntervalSelectViewBox
+from .custom_viewboxes import SpecanXZoomViewBox
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 from .app_state import AppState, CaptureID, AnnotationID
@@ -28,7 +29,7 @@ class SpecanView(QWidget):
         super().__init__(*args, **kwargs)
 
         # TODO: make MHz ticks display more nicely
-        myvb = IntervalSelectViewBox()
+        myvb = SpecanXZoomViewBox()
 
         self._selected_capture_id: CaptureID|None = None
         self._chunk_holder = ChunkHolder()
