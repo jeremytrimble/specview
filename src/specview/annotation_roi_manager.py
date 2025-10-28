@@ -154,7 +154,7 @@ class AnnotationROIManager(Generic[ROIType]):
                     label_text_color=(255, 255, 255),
                     label_fill_color=ANNOTATION_ROI_COLOR,
                 )
-                self._plot_widget.addItem(roi)
+                self._plot_widget.addItem(roi, ignoreBounds=True)
                 roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
                 aroi = AnnotationROI(ad.annotation_id, roi)
                 self._annotation_rois[ad.annotation_id] = aroi
@@ -180,7 +180,7 @@ class AnnotationROIManager(Generic[ROIType]):
                     label_text_color=(255, 255, 255),
                     label_fill_color=ANNOTATION_ROI_COLOR,
                 )
-                self._plot_widget.addItem(roi)
+                self._plot_widget.addItem(roi, ignoreBounds=True)
                 roi.sigRegionChanged.connect(lambda: self._on_linear_roi_changed(annotation_id))
                 aroi = AnnotationROI(ad.annotation_id, roi)
                 self._annotation_rois[ad.annotation_id] = aroi
