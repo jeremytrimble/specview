@@ -147,10 +147,12 @@ class ProcessingPoolManager:
             self._pool = None
 
 class ChunkBitmap:
+    # TODO: use a memmap instead of to_file
     def __init__(self, num_chunks: int):
         self._num_chunks = num_chunks
         self._bitmap = bytearray((num_chunks + 7) // 8)
         self._cond = threading.Condition()
+        self._num_times_set = [0]*num_chunks  # TODO: for debugging/testing, remove me later
 
     def set_chunk(self, chunk_index: int) -> None:
         with self._cond:
@@ -158,6 +160,7 @@ class ChunkBitmap:
                 byte_index = chunk_index // 8
                 bit_index = chunk_index % 8
                 self._bitmap[byte_index] |= (1 << bit_index)
+                self._num_times_set[chunk_index] += 1
     def clear_chunk(self, chunk_index: int) -> None:
         with self._cond:
             if 0 <= chunk_index < self._num_chunks:
@@ -309,6 +312,15 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
                 self._chunk_bitmap.set_chunk(chunk_index)
             self._chunk_bitmap.to_file(self._chunk_bitmap_path)
         #else: all chunks were computed already, so just create a view on the mmap
+
+            # TODO: remove later
+            L = []
+            for idx,val in enumerate(self._chunk_bitmap._num_times_set):
+                if val > 1:
+                    L.append( (idx, val) )
+            if L:
+                log.debug(f"{len(L)} chunks set multiple times: {L}")
+
 
         # create the view of the requested range
         rv = self._output_memmap[ start:stop, :]
@@ -596,6 +608,17 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             for chunk_index in chunks_to_compute:
                 self._chunk_bitmap.set_chunk(chunk_index)
             self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+
+
+            # TODO: remove later
+            L = []
+            for idx,val in enumerate(self._chunk_bitmap._num_times_set):
+                if val > 1:
+                    L.append( (idx, val) )
+            if L:
+                log.debug(f"{len(L)} chunks set multiple times: {L}")
+
+
         #else: all chunks were computed already, so just create a view on the mmap
 
         # create the view of the requested range
