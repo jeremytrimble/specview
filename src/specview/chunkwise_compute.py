@@ -406,10 +406,14 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        chunks_to_compute = []
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                chunks_to_compute.append(chunk_index)
+        chunks_i_need = range(start_chunk, end_chunk + 1)
+        chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
+
+        chunks_to_compute = set()
+        with self._cbc_cond:
+            chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
+            if chunks_to_compute:
+                self._chunks_being_computed.update(chunks_to_compute)
 
         def on_computation_complete(results_whocares: list[None]) -> None:
             # Mark chunks as computed
@@ -691,10 +695,14 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        chunks_to_compute = []
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                chunks_to_compute.append(chunk_index)
+        chunks_i_need = range(start_chunk, end_chunk + 1)
+        chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
+
+        chunks_to_compute = set()
+        with self._cbc_cond:
+            chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
+            if chunks_to_compute:
+                self._chunks_being_computed.update(chunks_to_compute)
 
         log.debug(f"FreqDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
 
