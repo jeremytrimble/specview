@@ -399,38 +399,40 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         rv.setflags(write=False)  # make read-only
         return rv
 
-    #def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
-    #    if start < 0 or stop > self._output_shape[0] or start >= stop:
-    #        raise ValueError("Invalid range")
+    def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
+        if start < 0 or stop > self._output_shape[0] or start >= stop:
+            raise ValueError("Invalid range")
 
-    #    start_chunk = self.map_sample_to_chunk(start)
-    #    end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
+        start_chunk = self.map_sample_to_chunk(start)
+        end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-    #    chunks_to_compute = []
-    #    for chunk_index in range(start_chunk, end_chunk + 1):
-    #        if not self._chunk_bitmap.is_chunk_set(chunk_index):
-    #            chunks_to_compute.append(chunk_index)
+        chunks_to_compute = []
+        for chunk_index in range(start_chunk, end_chunk + 1):
+            if not self._chunk_bitmap.is_chunk_set(chunk_index):
+                chunks_to_compute.append(chunk_index)
 
-    #    def on_computation_complete(results_whocares: list[None]) -> None:
-    #        # Mark chunks as computed
-    #        self._chunk_bitmap.set_chunks(chunks_to_compute)
+        def on_computation_complete(results_whocares: list[None]) -> None:
+            # Mark chunks as computed
+            if chunks_to_compute:
+                self._chunk_bitmap.set_chunks(chunks_to_compute)
+                self._chunk_bitmap.flush()
 
-    #        # create the view of the requested range
-    #        rv = self._output_memmap[ start:stop, :]
-    #        rv.setflags(write=False)  # make read-only
+            # create the view of the requested range
+            rv = self._output_memmap[ start:stop, :]
+            rv.setflags(write=False)  # make read-only
 
-    #        # Invoke the callback
-    #        cb(self, start, stop, rv)
+            # Invoke the callback
+            cb(self, start, stop, rv)
 
-    #    log.debug(f"TimeDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
-    #    if chunks_to_compute:
-    #        log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
-    #        requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
-    #        ppm = self._processing_pool_manager
-    #        ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
-    #    else:
-    #        log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
-    #        on_computation_complete([])
+        log.debug(f"TimeDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+        if chunks_to_compute:
+            log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+            ppm = self._processing_pool_manager
+            ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
+        else:
+            log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
+            on_computation_complete([])
 
     def _generate_chunk_computation_request(self, chunk_index: int) -> dict[str, typing.Any]:
         start_sample, end_sample = self.map_chunk_to_sample_range(chunk_index)
@@ -682,40 +684,40 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         rv.setflags(write=False)  # make read-only
         return rv
 
-#    def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
-#        if start < 0 or stop > self._output_shape[0] or start >= stop:
-#            raise ValueError("Invalid range")
-#
-#        start_chunk = self.map_sample_to_chunk(start)
-#        end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
-#
-#        chunks_to_compute = []
-#        for chunk_index in range(start_chunk, end_chunk + 1):
-#            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-#                chunks_to_compute.append(chunk_index)
-#
-#        log.debug(f"FreqDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
-#
-#        def on_computation_complete(results_whocares: list[None]) -> None:
-#            # Mark chunks as computed
-#            if chunks_to_compute:
-#                for chunk_index in chunks_to_compute:
-#                    self._chunk_bitmap.set_chunk(chunk_index)
-#
-#            # create the view of the requested range
-#            rv = self._output_memmap[ start:stop, :]
-#
-#            # Invoke the callback
-#            cb(self, start, stop, rv)
-#
-#        if chunks_to_compute:
-#            log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
-#            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
-#            ppm = self._processing_pool_manager
-#            ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
-#        else:
-#            log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
-#            on_computation_complete([])
+    def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
+        if start < 0 or stop > self._output_shape[0] or start >= stop:
+            raise ValueError("Invalid range")
+
+        start_chunk = self.map_sample_to_chunk(start)
+        end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
+
+        chunks_to_compute = []
+        for chunk_index in range(start_chunk, end_chunk + 1):
+            if not self._chunk_bitmap.is_chunk_set(chunk_index):
+                chunks_to_compute.append(chunk_index)
+
+        log.debug(f"FreqDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+
+        def on_computation_complete(results_whocares: list[None]) -> None:
+            # Mark chunks as computed
+            if chunks_to_compute:
+                self._chunk_bitmap.set_chunks(chunks_to_compute)
+                self._chunk_bitmap.flush()
+
+            # create the view of the requested range
+            rv = self._output_memmap[ start:stop, :]
+
+            # Invoke the callback
+            cb(self, start, stop, rv)
+
+        if chunks_to_compute:
+            log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+            ppm = self._processing_pool_manager
+            ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
+        else:
+            log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
+            on_computation_complete([])
 
     def _generate_chunk_computation_request(self, chunk_index: int) -> dict[str, typing.Any]:
         start_frame, end_frame = self.map_chunk_to_frame_range(chunk_index)
