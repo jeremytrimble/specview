@@ -147,58 +147,81 @@ class ProcessingPoolManager:
             self._pool = None
 
 class ChunkBitmap:
-    def __init__(self, num_chunks: int):
-        self._num_chunks = num_chunks
-        self._bitmap = bytearray((num_chunks + 7) // 8)
-        self._cond = threading.Condition()
+    def __init__(self, num_chunks: int, file_path: Path):
+        expected_size = (num_chunks + 7) // 8
+        if file_path.exists():
+            if file_path.stat().st_size != expected_size:
+                file_path.unlink()  # delete the file if size mismatch
+                make_file = True
+            else:
+                make_file = False
+        else:
+            make_file = True
 
-    def set_chunk(self, chunk_index: int) -> None:
+        if make_file:
+            with open(file_path, 'wb') as f:
+                f.write(b'\0' * expected_size)
+
+        self._cond = threading.Condition()
+        self._mmap = np.memmap(file_path, dtype=np.uint8, mode='r+', shape=(expected_size,))
+        self._num_chunks = num_chunks
+        self._file_path = file_path
+        self._chunks_set = set()
+        for chunk_index in range(num_chunks):
+            byte_index = chunk_index // 8
+            bit_index = chunk_index % 8
+            if (self._mmap[byte_index] & (np.uint8(1) << bit_index)) != 0:
+                self._chunks_set.add(chunk_index)
+
+    def set_chunks(self, chunk_indices: typing.Iterable[int]) -> None:
         with self._cond:
-            if 0 <= chunk_index < self._num_chunks:
-                byte_index = chunk_index // 8
-                bit_index = chunk_index % 8
-                self._bitmap[byte_index] |= (1 << bit_index)
-    def clear_chunk(self, chunk_index: int) -> None:
+            new_being_set = set(chunk_indices) - self._chunks_set
+            for chunk_index in new_being_set:
+                if 0 <= chunk_index < self._num_chunks:
+                    byte_index = chunk_index // 8
+                    bit_index = chunk_index % 8
+                    self._mmap[byte_index] |= (np.uint8(1) << bit_index)
+                    self._chunks_set.add(chunk_index)
+                    self._cond.notify_all()
+                else:
+                    log.warning(f"ChunkBitmap.set_chunks: chunk index {chunk_index} out of range")
+    def find_chunks_not_set(self, chunk_indices: typing.Iterable[int]) -> set[int]:
         with self._cond:
-            if 0 <= chunk_index < self._num_chunks:
-                byte_index = chunk_index // 8
-                bit_index = chunk_index % 8
-                self._bitmap[byte_index] &= ~(1 << bit_index)
+            return set(chunk_indices).difference(self._chunks_set)
     def is_chunk_set(self, chunk_index: int) -> bool:
         with self._cond:
-            if 0 <= chunk_index < self._num_chunks:
-                byte_index = chunk_index // 8
-                bit_index = chunk_index % 8
-                return (self._bitmap[byte_index] & (1 << bit_index)) != 0
-            raise IndexError(f"Chunk index {chunk_index} out of range")
+            return chunk_index in self._chunks_set
     def __len__(self) -> int:
+        return self._num_chunks
+    def flush(self) -> None:
+        self._mmap.flush()
+    def close(self) -> None:
+        self._mmap._mmap.close()
+    def wait_for_bits_set(self, chunk_indices: typing.Iterable[int], timeout_sec: float|None=None) -> bool:
+        """
+        Wait until all specified chunk indices are set, or until timeout.
+        Returns True if all specified chunks are set, False if timeout occurred.
+        """
+        start_time = time.monotonic()
+        deadline = start_time + timeout_sec if timeout_sec is not None else None
+        wait_set = set(chunk_indices)
         with self._cond:
-            return self._num_chunks
-    #def __iter__(self):
-    #    for chunk_index in range(self._num_chunks):
-    #        yield self.is_chunk_set(chunk_index)
-    def to_file(self, file_path: Path) -> None:
-        with self._cond:
-            header = struct.pack("<I", self._num_chunks)  # Write number of chunks as uint32
-            body = bytes(self._bitmap)
-        with open(file_path, 'wb') as f:
-            f.write(header)
-            f.write(body)
-    @classmethod
-    def from_file(cls, file_path: Path) -> ChunkBitmap:
-        with open(file_path, 'rb') as f:
-            header = f.read(4)
-            if len(header) < 4:
-                raise ValueError("Invalid bitmap file: too short")
-            num_chunks = struct.unpack("<I", header)[0]
-            bitmap_data = f.read()
-            expected_size = (num_chunks + 7) // 8
-            if len(bitmap_data) < expected_size:
-                raise ValueError("Invalid bitmap file: bitmap data too short")
-            cb = cls(num_chunks)
-            with cb._cond:  # shouldn't matter since nobody else has access yet
-                cb._bitmap = bytearray(bitmap_data[:expected_size])
-            return cb
+            while True:
+
+                to_remove = wait_set.intersection(self._chunks_set)
+                wait_set -= to_remove
+
+                if not wait_set:
+                    return True
+
+                else:
+                    timeout = None
+                    if deadline is not None:
+                        now = time.monotonic()
+                        timeout = max(0, deadline - now)
+                        if timeout <= 0:
+                            return False
+                    self._cond.wait(timeout=timeout)
 
 def compute_num_chunks(total_samples: int, chunk_size_samples: int) -> int:
     return (total_samples + chunk_size_samples - 1) // chunk_size_samples
@@ -245,15 +268,11 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
-        self._chunk_bitmap = None
-        if self._chunk_bitmap_path.exists():
-            self._chunk_bitmap: ChunkBitmap = ChunkBitmap.from_file(self._chunk_bitmap_path)
-            if len(self._chunk_bitmap) != self._num_output_chunks:
-                # size mismatch, will recreate from scratch below
-                self._chunk_bitmap = None   
-        if self._chunk_bitmap is None:
-            self._chunk_bitmap = ChunkBitmap(self._num_output_chunks)
-            self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+        # A chunk index will be set in _chunk_bitmap if computation has been completed
+        self._chunk_bitmap: ChunkBitmap = ChunkBitmap(num_chunks=self._num_output_chunks, file_path=self._chunk_bitmap_path)
+        # A chunk index will be set in _chunks_being_computed if computation has been started
+        self._chunks_being_computed: set[int] = set()
+        self._cbc_cond = threading.Condition()
 
         self._output_file = self._state_dir / f"data.bin"
         if not self._output_file.exists():
@@ -284,30 +303,32 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        chunks_to_compute = []
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                chunks_to_compute.append(chunk_index)
+        chunks_i_need = range(start_chunk, end_chunk + 1)
+        chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
 
-        log.debug(f"TimeDomainCCA.get_range_blocking: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+        log.debug(f"TimeDomainCCA.get_range_blocking: Getting {len(chunks_i_need)} chunks for range {start}-{stop}")
 
-        if chunks_to_compute:
-            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+        if chunks_not_yet_computed:
             ppm = self._processing_pool_manager
             pool = ppm.get_pool()
-            # perform the computation in the parallel process pool.
-            # once it has completed successfully, we can read the data from the memmap
-            start_time = time.monotonic()
-            async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
-            async_result.wait()
-            end_time = time.monotonic()
-            if not async_result.successful():
-                raise RuntimeError("Error during chunk computation") from async_result.value()
-            log.debug(f"TimeDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
-
-            for chunk_index in chunks_to_compute:
-                self._chunk_bitmap.set_chunk(chunk_index)
-            self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+            async_result: AsyncResult | None = None
+            with self._cbc_cond:
+                chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
+                if chunks_to_compute:
+                    requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+                    # perform the computation in the parallel process pool.
+                    # once it has completed successfully, we can read the data from the memmap
+                    start_time = time.monotonic()
+                    async_result = pool.map_async(self._perform_chunk_computation, requests)
+                    self._chunks_being_computed.update(chunks_to_compute)
+            if async_result is not None:
+                async_result.wait()
+                end_time = time.monotonic()
+                if not async_result.successful():
+                    raise RuntimeError("Error during chunk computation") from async_result.value()
+                self._chunk_bitmap.set_chunks(chunks_to_compute)
+                log.debug(f"TimeDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
+            self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
         #else: all chunks were computed already, so just create a view on the mmap
 
         # create the view of the requested range
@@ -322,17 +343,21 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        chunks_to_compute = []
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                chunks_to_compute.append(chunk_index)
+        chunks_i_need = range(start_chunk, end_chunk + 1)
+        chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
+
+        chunks_to_compute = set()
+        with self._cbc_cond:
+            chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
+            if chunks_to_compute:
+                self._chunks_being_computed.update(chunks_to_compute)
 
         def on_computation_complete(results_whocares: list[None]) -> None:
             # Mark chunks as computed
             if chunks_to_compute:
-                for chunk_index in chunks_to_compute:
-                    self._chunk_bitmap.set_chunk(chunk_index)
-                self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+                self._chunk_bitmap.set_chunks(chunks_to_compute)
+                self._chunk_bitmap.flush()
+            self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
 
             # create the view of the requested range
             rv = self._output_memmap[ start:stop, :]
@@ -481,7 +506,7 @@ class FrequencyDomainComputationSpec(BaseModel):
 DEFAULT_FREQ_COMPUTATION_SPEC = FrequencyDomainComputationSpec()
 
 class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
-    def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_samples=1_000, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
+    def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_bins=128*1024, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
         if cache_manager is None:
             cache_manager = CacheManager.get_default_cache_manager()
 
@@ -493,7 +518,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._signal_file_datatype = signal_file_datatype
         self._num_input_channels = num_input_channels
         self._target_output_channel = target_output_channel
-        self._chunk_size_samples = chunk_size_samples
+        self._chunk_size_frames = max( 64, chunk_size_bins//comp_spec.NFFT )
         self._input_sample_rate_Hz = sample_rate_Hz
         self._comp_spec = comp_spec
 
@@ -509,7 +534,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._output_shape = (num_output_frames, self._stfft_obj.mfft)
         self._output_dtype = np.dtype(np.float32)
 
-        self._num_output_chunks = compute_num_chunks(self._output_shape[0], self._chunk_size_samples)
+        self._num_output_chunks = compute_num_chunks(self._output_shape[0], self._chunk_size_frames)
 
         # Note: this is only needed if we have nontrivial computation to do in this class
         cache_tag_tuples = cache_manager.get_cache_tag_tuples_for_file(signal_file) + comp_spec.get_cache_tag_tuples() + [("target_output_channel", str(target_output_channel)) ]
@@ -517,15 +542,10 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
-        self._chunk_bitmap = None
-        if self._chunk_bitmap_path.exists():
-            self._chunk_bitmap: ChunkBitmap = ChunkBitmap.from_file(self._chunk_bitmap_path)
-            if len(self._chunk_bitmap) != self._num_output_chunks:
-                # size mismatch, will recreate from scratch below
-                self._chunk_bitmap = None   
-        if self._chunk_bitmap is None:
-            self._chunk_bitmap = ChunkBitmap(self._num_output_chunks)
-            self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+        # A chunk index will be set in _chunk_bitmap if computation has been completed
+        self._chunk_bitmap: ChunkBitmap = ChunkBitmap(num_chunks=self._num_output_chunks, file_path=self._chunk_bitmap_path) # A chunk index will be set in _chunks_being_computed if computation has been started
+        self._chunks_being_computed: set[int] = set()
+        self._cbc_cond = threading.Condition()
 
         self._output_file = self._state_dir / f"data.bin"
         if not self._output_file.exists():
@@ -542,11 +562,11 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         return self._output_shape, self._output_dtype
 
     def map_sample_to_chunk(self, sample_index: int) -> int:
-        return sample_index // self._chunk_size_samples
+        return sample_index // self._chunk_size_frames
 
     def map_chunk_to_frame_range(self, chunk_index: int) -> tuple[int, int]:
-        start_sample = chunk_index * self._chunk_size_samples
-        end_sample = min(start_sample + self._chunk_size_samples, self._output_shape[0])
+        start_sample = chunk_index * self._chunk_size_frames
+        end_sample = min(start_sample + self._chunk_size_frames, self._output_shape[0])
         return start_sample, end_sample
 
     def get_range_if_available(self, start:int, stop:int) -> npt.NDArray|None:
@@ -559,9 +579,8 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                return None
+        if self._chunk_bitmap.find_chunks_not_set( range(start_chunk, end_chunk + 1) ):
+            return None
 
         # create the view of the requested range
         rv = self._output_memmap[ start:stop, :]
@@ -574,32 +593,35 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        chunks_to_compute = []
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                chunks_to_compute.append(chunk_index)
+        chunks_i_need = range(start_chunk, end_chunk + 1)
+        chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
 
-        log.debug(f"FreqDomainCCA.get_range_blocking: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
-        if chunks_to_compute:
-            requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+        if chunks_not_yet_computed:
             ppm = self._processing_pool_manager
             pool = ppm.get_pool()
-            # perform the computation in the parallel process pool.
-            # once it has completed successfully, we can read the data from the memmap
-            start_time = time.monotonic()
-            async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
-            async_result.wait()
-            if not async_result.successful():
-                raise RuntimeError("Error during chunk computation") from async_result.value()
-            end_time = time.monotonic()
-            log.debug(f"FreqDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
-            for chunk_index in chunks_to_compute:
-                self._chunk_bitmap.set_chunk(chunk_index)
-            self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+            async_result: AsyncResult | None = None
+            with self._cbc_cond:
+                chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
+                if chunks_to_compute:
+                    requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
+                    # perform the computation in the parallel process pool.
+                    # once it has completed successfully, we can read the data from the memmap
+                    start_time = time.monotonic()
+                    async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
+                    self._chunks_being_computed.update(chunks_to_compute)
+            if async_result is not None:
+                async_result.wait()
+                end_time = time.monotonic()
+                if not async_result.successful():
+                    raise RuntimeError("Error during chunk computation") from async_result.value()
+                self._chunk_bitmap.set_chunks(chunks_to_compute)
+                log.debug(f"FreqDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
+            self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
         #else: all chunks were computed already, so just create a view on the mmap
 
         # create the view of the requested range
         rv = self._output_memmap[ start:stop, :]
+        rv.setflags(write=False)  # make read-only
         return rv
 
     def get_range_callback(self, start:int, stop:int, cb: RangeComputedCallback):
@@ -609,19 +631,21 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_chunk = self.map_sample_to_chunk(start)
         end_chunk = self.map_sample_to_chunk(stop - 1)  # inclusive
 
-        chunks_to_compute = []
-        for chunk_index in range(start_chunk, end_chunk + 1):
-            if not self._chunk_bitmap.is_chunk_set(chunk_index):
-                chunks_to_compute.append(chunk_index)
+        chunks_i_need = range(start_chunk, end_chunk + 1)
+        chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
 
-        log.debug(f"FreqDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
+        chunks_to_compute = set()
+        with self._cbc_cond:
+            chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
+            if chunks_to_compute:
+                self._chunks_being_computed.update(chunks_to_compute)
 
         def on_computation_complete(results_whocares: list[None]) -> None:
             # Mark chunks as computed
             if chunks_to_compute:
-                for chunk_index in chunks_to_compute:
-                    self._chunk_bitmap.set_chunk(chunk_index)
-                self._chunk_bitmap.to_file(self._chunk_bitmap_path)
+                self._chunk_bitmap.set_chunks(chunks_to_compute)
+                self._chunk_bitmap.flush()
+            self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
 
             # create the view of the requested range
             rv = self._output_memmap[ start:stop, :]
