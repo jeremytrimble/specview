@@ -182,15 +182,9 @@ class ChunkBitmap:
                     bit_index = chunk_index % 8
                     self._mmap[byte_index] |= (np.uint8(1) << bit_index)
                     self._chunks_set.add(chunk_index)
+                    self._cond.notify_all()
                 else:
                     log.warning(f"ChunkBitmap.set_chunks: chunk index {chunk_index} out of range")
-
-    #def clear_chunk(self, chunk_index: int) -> None:
-    #    with self._cond:
-    #        if 0 <= chunk_index < self._num_chunks:
-    #            byte_index = chunk_index // 8
-    #            bit_index = chunk_index % 8
-    #            self._mmap[byte_index] &= ~(np.uint8(1) << bit_index)
     def find_chunks_not_set(self, chunk_indices: list[int]) -> set[int]:
         with self._cond:
             return set(chunk_indices).difference(self._chunks_set)
