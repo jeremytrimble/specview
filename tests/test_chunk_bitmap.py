@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from specview.chunkwise_compute import ChunkBitmap2
+from specview.chunkwise_compute import ChunkBitmap
 
 def test_chunk_bitmap2_basic_operations(tmpdir):
     # Create a temporary file path for testing
@@ -8,7 +8,7 @@ def test_chunk_bitmap2_basic_operations(tmpdir):
     
     # Test initialization
     num_chunks = 20
-    bitmap = ChunkBitmap2(num_chunks, temp_path)
+    bitmap = ChunkBitmap(num_chunks, temp_path)
     
     # Test length
     assert len(bitmap) == num_chunks
@@ -38,7 +38,7 @@ def test_chunk_bitmap2_basic_operations(tmpdir):
     bitmap.flush()
     bitmap.close()
     
-    bitmap2 = ChunkBitmap2(num_chunks, temp_path)
+    bitmap2 = ChunkBitmap(num_chunks, temp_path)
     assert bitmap2.is_chunk_set(0)
     assert bitmap2.is_chunk_set(5)
     assert bitmap2.is_chunk_set(19)
@@ -52,13 +52,13 @@ def test_chunk_bitmap2_size_mismatch(tmpdir):
     temp_path = Path(tmpdir) / "bitmap.dat"
     
     # Create initial bitmap with 10 chunks
-    bitmap1 = ChunkBitmap2(10, temp_path)
+    bitmap1 = ChunkBitmap(10, temp_path)
     bitmap1.set_chunks([0])
     bitmap1.flush()
     bitmap1.close()
     
     # Create new bitmap with different number of chunks
-    bitmap2 = ChunkBitmap2(20, temp_path)
+    bitmap2 = ChunkBitmap(20, temp_path)
     assert len(bitmap2) == 20
     assert not bitmap2.is_chunk_set(0)  # Should be reset
     
@@ -66,7 +66,7 @@ def test_chunk_bitmap2_size_mismatch(tmpdir):
 
 def test_chunk_bitmap2_wait_for_bits(tmpdir):
     temp_path = Path(tmpdir) / "bitmap.dat"
-    bitmap = ChunkBitmap2(10, temp_path)
+    bitmap = ChunkBitmap(10, temp_path)
     
     # Test immediate timeout
     assert not bitmap.wait_for_bits_set([1, 2], timeout_sec=0)

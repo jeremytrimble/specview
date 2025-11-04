@@ -146,64 +146,7 @@ class ProcessingPoolManager:
             self._pool.join()
             self._pool = None
 
-#class ChunkBitmap:
-#    # TODO: use a memmap instead of to_file
-#    def __init__(self, num_chunks: int):
-#        self._num_chunks = num_chunks
-#        self._bitmap = bytearray((num_chunks + 7) // 8)
-#        self._cond = threading.Condition()
-#        self._num_times_set = [0]*num_chunks  # TODO: for debugging/testing, remove me later
-#
-#    def set_chunk(self, chunk_index: int) -> None:
-#        with self._cond:
-#            if 0 <= chunk_index < self._num_chunks:
-#                byte_index = chunk_index // 8
-#                bit_index = chunk_index % 8
-#                self._bitmap[byte_index] |= (1 << bit_index)
-#                self._num_times_set[chunk_index] += 1
-#    def clear_chunk(self, chunk_index: int) -> None:
-#        with self._cond:
-#            if 0 <= chunk_index < self._num_chunks:
-#                byte_index = chunk_index // 8
-#                bit_index = chunk_index % 8
-#                self._bitmap[byte_index] &= ~(1 << bit_index)
-#    def is_chunk_set(self, chunk_index: int) -> bool:
-#        with self._cond:
-#            if 0 <= chunk_index < self._num_chunks:
-#                byte_index = chunk_index // 8
-#                bit_index = chunk_index % 8
-#                return (self._bitmap[byte_index] & (1 << bit_index)) != 0
-#            raise IndexError(f"Chunk index {chunk_index} out of range")
-#    def __len__(self) -> int:
-#        with self._cond:
-#            return self._num_chunks
-#    #def __iter__(self):
-#    #    for chunk_index in range(self._num_chunks):
-#    #        yield self.is_chunk_set(chunk_index)
-#    def to_file(self, file_path: Path) -> None:
-#        with self._cond:
-#            header = struct.pack("<I", self._num_chunks)  # Write number of chunks as uint32
-#            body = bytes(self._bitmap)
-#        with open(file_path, 'wb') as f:
-#            f.write(header)
-#            f.write(body)
-#    @classmethod
-#    def from_file(cls, file_path: Path) -> ChunkBitmap:
-#        with open(file_path, 'rb') as f:
-#            header = f.read(4)
-#            if len(header) < 4:
-#                raise ValueError("Invalid bitmap file: too short")
-#            num_chunks = struct.unpack("<I", header)[0]
-#            bitmap_data = f.read()
-#            expected_size = (num_chunks + 7) // 8
-#            if len(bitmap_data) < expected_size:
-#                raise ValueError("Invalid bitmap file: bitmap data too short")
-#            cb = cls(num_chunks)
-#            with cb._cond:  # shouldn't matter since nobody else has access yet
-#                cb._bitmap = bytearray(bitmap_data[:expected_size])
-#            return cb
-
-class ChunkBitmap2:
+class ChunkBitmap:
     def __init__(self, num_chunks: int, file_path: Path):
         expected_size = (num_chunks + 7) // 8
         if file_path.exists():
@@ -332,7 +275,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
         # A chunk index will be set in _chunk_bitmap if computation has been completed
-        self._chunk_bitmap: ChunkBitmap2 = ChunkBitmap2(num_chunks=self._num_output_chunks, file_path=self._chunk_bitmap_path)
+        self._chunk_bitmap: ChunkBitmap = ChunkBitmap(num_chunks=self._num_output_chunks, file_path=self._chunk_bitmap_path)
         # A chunk index will be set in _chunks_being_computed if computation has been started
         self._chunks_being_computed: set[int] = set()
         self._cbc_cond = threading.Condition()
@@ -605,7 +548,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
         # A chunk index will be set in _chunk_bitmap if computation has been completed
-        self._chunk_bitmap: ChunkBitmap2 = ChunkBitmap2(num_chunks=self._num_output_chunks, file_path=self._chunk_bitmap_path) # A chunk index will be set in _chunks_being_computed if computation has been started
+        self._chunk_bitmap: ChunkBitmap = ChunkBitmap(num_chunks=self._num_output_chunks, file_path=self._chunk_bitmap_path) # A chunk index will be set in _chunks_being_computed if computation has been started
         self._chunks_being_computed: set[int] = set()
         self._cbc_cond = threading.Condition()
 
