@@ -173,7 +173,7 @@ class ChunkBitmap:
             if (self._mmap[byte_index] & (np.uint8(1) << bit_index)) != 0:
                 self._chunks_set.add(chunk_index)
 
-    def set_chunks(self, chunk_indices: list[int]) -> None:
+    def set_chunks(self, chunk_indices: typing.Iterable[int]) -> None:
         with self._cond:
             new_being_set = set(chunk_indices) - self._chunks_set
             for chunk_index in new_being_set:
@@ -185,7 +185,7 @@ class ChunkBitmap:
                     self._cond.notify_all()
                 else:
                     log.warning(f"ChunkBitmap.set_chunks: chunk index {chunk_index} out of range")
-    def find_chunks_not_set(self, chunk_indices: list[int]) -> set[int]:
+    def find_chunks_not_set(self, chunk_indices: typing.Iterable[int]) -> set[int]:
         with self._cond:
             return set(chunk_indices).difference(self._chunks_set)
     def is_chunk_set(self, chunk_index: int) -> bool:
@@ -197,7 +197,7 @@ class ChunkBitmap:
         self._mmap.flush()
     def close(self) -> None:
         self._mmap._mmap.close()
-    def wait_for_bits_set(self, chunk_indices: set[int], timeout_sec: float|None=None) -> bool:
+    def wait_for_bits_set(self, chunk_indices: typing.Iterable[int], timeout_sec: float|None=None) -> bool:
         """
         Wait until all specified chunk indices are set, or until timeout.
         Returns True if all specified chunks are set, False if timeout occurred.
@@ -327,7 +327,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
                 if not async_result.successful():
                     raise RuntimeError("Error during chunk computation") from async_result.value()
                 self._chunk_bitmap.set_chunks(chunks_to_compute)
-                log.debug(f"TimeDomainCCA.get_range_blocking: Computed {len(chunks_i_need)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
+                log.debug(f"TimeDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
             self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
         #else: all chunks were computed already, so just create a view on the mmap
 
@@ -357,6 +357,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             if chunks_to_compute:
                 self._chunk_bitmap.set_chunks(chunks_to_compute)
                 self._chunk_bitmap.flush()
+            self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
 
             # create the view of the requested range
             rv = self._output_memmap[ start:stop, :]
@@ -648,6 +649,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             if chunks_to_compute:
                 self._chunk_bitmap.set_chunks(chunks_to_compute)
                 self._chunk_bitmap.flush()
+            self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
 
             # create the view of the requested range
             rv = self._output_memmap[ start:stop, :]
