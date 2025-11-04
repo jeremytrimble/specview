@@ -506,7 +506,7 @@ class FrequencyDomainComputationSpec(BaseModel):
 DEFAULT_FREQ_COMPUTATION_SPEC = FrequencyDomainComputationSpec()
 
 class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
-    def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_samples=1_000, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
+    def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_bins=128*1024, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
         if cache_manager is None:
             cache_manager = CacheManager.get_default_cache_manager()
 
@@ -518,7 +518,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._signal_file_datatype = signal_file_datatype
         self._num_input_channels = num_input_channels
         self._target_output_channel = target_output_channel
-        self._chunk_size_samples = chunk_size_samples
+        self._chunk_size_frames = max( 64, chunk_size_bins//comp_spec.NFFT )
         self._input_sample_rate_Hz = sample_rate_Hz
         self._comp_spec = comp_spec
 
@@ -534,7 +534,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._output_shape = (num_output_frames, self._stfft_obj.mfft)
         self._output_dtype = np.dtype(np.float32)
 
-        self._num_output_chunks = compute_num_chunks(self._output_shape[0], self._chunk_size_samples)
+        self._num_output_chunks = compute_num_chunks(self._output_shape[0], self._chunk_size_frames)
 
         # Note: this is only needed if we have nontrivial computation to do in this class
         cache_tag_tuples = cache_manager.get_cache_tag_tuples_for_file(signal_file) + comp_spec.get_cache_tag_tuples() + [("target_output_channel", str(target_output_channel)) ]
@@ -562,11 +562,11 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         return self._output_shape, self._output_dtype
 
     def map_sample_to_chunk(self, sample_index: int) -> int:
-        return sample_index // self._chunk_size_samples
+        return sample_index // self._chunk_size_frames
 
     def map_chunk_to_frame_range(self, chunk_index: int) -> tuple[int, int]:
-        start_sample = chunk_index * self._chunk_size_samples
-        end_sample = min(start_sample + self._chunk_size_samples, self._output_shape[0])
+        start_sample = chunk_index * self._chunk_size_frames
+        end_sample = min(start_sample + self._chunk_size_frames, self._output_shape[0])
         return start_sample, end_sample
 
     def get_range_if_available(self, start:int, stop:int) -> npt.NDArray|None:
@@ -595,8 +595,6 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         chunks_i_need = range(start_chunk, end_chunk + 1)
         chunks_not_yet_computed = self._chunk_bitmap.find_chunks_not_set(chunks_i_need)
-
-        log.debug(f"FreqDomainCCA.get_range_blocking: Computing {len(chunks_i_need)} chunks for range {start}-{stop}")
 
         if chunks_not_yet_computed:
             ppm = self._processing_pool_manager
@@ -641,8 +639,6 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
             if chunks_to_compute:
                 self._chunks_being_computed.update(chunks_to_compute)
-
-        log.debug(f"FreqDomainCCA.get_range_callback: Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
 
         def on_computation_complete(results_whocares: list[None]) -> None:
             # Mark chunks as computed

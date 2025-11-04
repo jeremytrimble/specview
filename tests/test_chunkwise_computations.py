@@ -101,7 +101,7 @@ def test_chunkwise_computation_frequency_domain(tmpdir):
             comp_spec=comp_spec,
             cache_manager=cache_manager,
             processing_pool_manager=ppm,
-            chunk_size_samples=chunk_size,
+            chunk_size_bins=chunk_size,
         )
 
         shape, output_dtype = computed_array.get_shape_and_dtype()
