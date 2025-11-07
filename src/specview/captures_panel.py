@@ -18,8 +18,8 @@ class CapturesPanel(QWidget):
 
         self.tree_widget = QTreeWidget(self)
         self.tree_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tree_widget.setColumnCount(5)
-        self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq", "Duration", "Date/Time", "Description"])
+        self.tree_widget.setColumnCount(4)
+        self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq", "Duration", "Date/Time"])
         self.layout.addWidget(self.tree_widget)
 
         # Example items, replace with actual capture data
@@ -65,9 +65,8 @@ class CapturesPanel(QWidget):
                 freq_Hz = capture[sigmf.SigMFFile.FREQUENCY_KEY] 
 
                 datetime_str = capture.get(sigmf.SigMFFile.DATETIME_KEY, "N/A")
-                description_str = capture.get(sigmf.SigMFFile.DESCRIPTION_KEY, "N/A")
 
-                capture_item = QTreeWidgetItem([f"Capture {capture.capture_idx_in_file:02d}", freq_format(freq_Hz), duration_format(capture.duration_sec), datetime_str, description_str])
+                capture_item = QTreeWidgetItem([f"Capture {capture.capture_idx_in_file:02d}", freq_format(freq_Hz), duration_format(capture.duration_sec), datetime_str])
                 capture_item.capture_id = capture.capture_id
                 file_item.addChild(capture_item)
             file_items.append(file_item)
