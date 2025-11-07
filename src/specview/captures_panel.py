@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QTreeView, QTreeWidgetItem, QVBoxLayout, QWidget, QTreeWidget, QApplication, QAbstractItemView
 
 from .loaded_file_mgmt import LoadedFile
+from .util import duration_format, freq_format
 
 from .app_state import AppState 
 
@@ -17,8 +18,8 @@ class CapturesPanel(QWidget):
 
         self.tree_widget = QTreeWidget(self)
         self.tree_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.tree_widget.setColumnCount(3)
-        self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq (MHz)", "Duration (s)"])
+        self.tree_widget.setColumnCount(5)
+        self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq", "Duration", "Date/Time", "Description"])
         self.layout.addWidget(self.tree_widget)
 
         # Example items, replace with actual capture data
@@ -38,10 +39,8 @@ class CapturesPanel(QWidget):
         if selected is None:
             return
 
-        #parent = selected.parent()
-        #if parent is None:
-        #    return
-        #idx = parent.indexOfChild(selected)
+        if not hasattr(selected, "capture_id"):
+            return
 
         app_state = self._get_app_state()
         app_state.set_selected_capture(capture_id=selected.capture_id)
@@ -64,12 +63,11 @@ class CapturesPanel(QWidget):
 
                 # TODO: present friendly units
                 freq_Hz = capture[sigmf.SigMFFile.FREQUENCY_KEY] 
-                freq_MHz = freq_Hz/1e6
 
-                # TODO: compute length here
-                #duration_sec = capture[sigmf.SigMFFile.LENGTH_INDEX_KEY]
+                datetime_str = capture.get(sigmf.SigMFFile.DATETIME_KEY, "N/A")
+                description_str = capture.get(sigmf.SigMFFile.DESCRIPTION_KEY, "N/A")
 
-                capture_item = QTreeWidgetItem([f"Capture {capture.capture_idx_in_file:02d}", f"{freq_MHz:.2f} MHz"])
+                capture_item = QTreeWidgetItem([f"Capture {capture.capture_idx_in_file:02d}", freq_format(freq_Hz), duration_format(capture.duration_sec), datetime_str, description_str])
                 capture_item.capture_id = capture.capture_id
                 file_item.addChild(capture_item)
             file_items.append(file_item)
