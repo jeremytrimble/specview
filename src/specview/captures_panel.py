@@ -1,4 +1,8 @@
-from PyQt5.QtWidgets import QTreeView, QTreeWidgetItem, QVBoxLayout, QWidget, QTreeWidget, QApplication, QAbstractItemView
+from PyQt5.QtWidgets import (
+    QTreeView, QTreeWidgetItem, QVBoxLayout, QSplitter, QWidget, 
+    QTreeWidget, QApplication, QAbstractItemView, QLabel, QFormLayout
+)
+from PyQt5.QtCore import Qt
 
 from .loaded_file_mgmt import LoadedFile
 from .util import duration_format, freq_format
@@ -14,17 +18,67 @@ class CapturesPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.layout = QVBoxLayout(self)
-
+        self.splitter = QSplitter(Qt.Orientation.Horizontal, self)
+        
+        # Left side: Tree widget for captures
+        self.captures_widget = QWidget(self)
+        self.captures_layout = QVBoxLayout(self.captures_widget)
+        
         self.tree_widget = QTreeWidget(self)
         self.tree_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tree_widget.setColumnCount(4)
         self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq", "Duration", "Date/Time"])
-        self.layout.addWidget(self.tree_widget)
+        self.captures_layout.addWidget(self.tree_widget)
+        
+        self.splitter.addWidget(self.captures_widget)
+        
+        # Right side: Metadata panel
+        self.metadata_widget = QWidget(self)
+        self.metadata_layout = QFormLayout(self.metadata_widget)
 
-        # Example items, replace with actual capture data
+        self.file_path_label = QLabel("File Path:", self)
+        self.file_path_value = QLabel("", self)
+        self.metadata_layout.addRow(self.file_path_label, self.file_path_value)
+
+        self.sample_rate_label = QLabel("Sample Rate:", self)
+        self.sample_rate_value = QLabel("", self)
+        self.metadata_layout.addRow(self.sample_rate_label, self.sample_rate_value)
+
+        self.duration_label = QLabel("Total Duration:", self)
+        self.duration_value = QLabel("", self)
+        self.metadata_layout.addRow(self.duration_label, self.duration_value)
+
+        self.num_channels_label = QLabel("Channels:", self)
+        self.num_channels_value = QLabel("", self)
+        self.metadata_layout.addRow(self.num_channels_label, self.num_channels_value)
+        
+        self.datatype_label = QLabel("Data Type:", self)
+        self.datatype_value = QLabel("", self)
+        self.metadata_layout.addRow(self.datatype_label, self.datatype_value)
+        
+        self.description_label = QLabel("Description:", self)
+        self.description_value = QLabel("", self)
+        self.metadata_layout.addRow(self.description_label, self.description_value)
+        
+        self.author_label = QLabel("Author:", self)
+        self.author_value = QLabel("", self)
+        self.metadata_layout.addRow(self.author_label, self.author_value)
+
+        for label in [self.file_path_value, self.sample_rate_value, self.duration_value,
+                      self.num_channels_value, self.datatype_value,
+                      self.description_value, self.author_value]:
+            label.setTextInteractionFlags(label.textInteractionFlags() | Qt.TextSelectableByMouse)
+        
+        self.splitter.addWidget(self.metadata_widget)
+        self.splitter.setStretchFactor(0, 2)
+        self.splitter.setStretchFactor(1, 1)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.splitter)
+        self.setLayout(layout)
+
+        # Connect signals
         self._connect_app_signals()
-
         self.tree_widget.currentItemChanged.connect(self._on_current_item_changed)
 
     def _get_app_state(self) -> AppState:
@@ -33,6 +87,7 @@ class CapturesPanel(QWidget):
     def _connect_app_signals(self):
         app_state = self._get_app_state()
         app_state.loaded_files_changed.connect(self.populate_tree)
+        app_state.selected_capture_changed.connect(self.on_capture_changed)
 
     def _on_current_item_changed(self, selected: QTreeWidgetItem|None, deselected:QTreeWidgetItem|None):
         #log.debug(f"current item changed: {args=}, {kwargs=}")
@@ -44,6 +99,27 @@ class CapturesPanel(QWidget):
 
         app_state = self._get_app_state()
         app_state.set_selected_capture(capture_id=selected.capture_id)
+
+    def on_capture_changed(self, capture_id: str):
+        # Clear metadata display
+        self.sample_rate_value.setText("")
+        self.num_channels_value.setText("")
+        self.datatype_value.setText("")
+        self.description_value.setText("")
+        self.author_value.setText("")
+
+        app_state = self._get_app_state()
+        loaded_file = app_state._loaded_files.get_capture_from_id(capture_id).parent_loadedfile
+        
+        sigmf_meta = loaded_file.sigmf_file.get_global_info()
+        self.file_path_value.setText(str(loaded_file.file_path))
+        self.sample_rate_value.setText(freq_format(loaded_file.sample_rate_Hz))
+        self.duration_value.setText(duration_format(loaded_file.sigmf_file.sample_count / loaded_file.sample_rate_Hz))
+        self.num_channels_value.setText(str(loaded_file.num_channels))
+        self.datatype_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.DATATYPE_KEY, "N/A")))
+        self.description_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.DESCRIPTION_KEY, "N/A")))
+        self.author_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.AUTHOR_KEY, "N/A")))
+        
 
     def populate_tree(self):
         app_state = self._get_app_state()
@@ -57,7 +133,7 @@ class CapturesPanel(QWidget):
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
             file_item = QTreeWidgetItem([loaded_file.file_path.name])
-            #file_item.open_file_id = loaded_file.file_id
+
             for capture in loaded_file._capture_id_to_capture.values():
                 #log.debug(f" populating for {capture}")
 
