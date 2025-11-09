@@ -1,7 +1,8 @@
 from PyQt5.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout, QMenu
 
 from .loaded_file_mgmt import LoadedDictAction, AnnotationID, CaptureID
+from .json_editor_dialog import JSONEditorDialog
 
 from .app_state import AppState
 import sigmf
@@ -200,6 +201,8 @@ class AnnotationsModel(QAbstractTableModel):
         if annotations_dict is None:
             return False
 
+        # FIXME: this seesms to assume that the order of the annotations dict is
+        # the same as the order of our rows, which may not always be true
         keys = list(annotations_dict.keys())
         row = index.row()
         col = index.column()
@@ -286,6 +289,10 @@ class AnnotationsTable(QWidget):
         # Enable sorting on the table view
         self.table.setSortingEnabled(True)
         
+        # Enable context menu
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._on_context_menu)
+        
         self.layout = QHBoxLayout()
         self.layout.addWidget(self.table)
         self.setLayout(self.layout)
@@ -318,6 +325,65 @@ class AnnotationsTable(QWidget):
         
         # Update header sort indicator
         self.table.horizontalHeader().setSortIndicator(self._current_sort_column, self._current_sort_order)
+
+    def _on_context_menu(self, position):
+        """Show context menu for table rows."""
+        index = self.table.indexAt(position)
+        if not index.isValid():
+            return
+        
+        # Map proxy index to source model index
+        source_index = self.proxy_model.mapToSource(index)
+        
+        menu = QMenu(self)
+        view_json_action = menu.addAction("View/Edit Annotation JSON")
+        
+        action = menu.exec_(self.table.viewport().mapToGlobal(position))
+        
+        if action == view_json_action:
+            self._view_edit_annotation_json(source_index.row())
+    
+    def _view_edit_annotation_json(self, row):
+        """Open a dialog to view and edit the annotation's raw JSON."""
+        annotations_dict: dict[str, LoadedDictAction] = self.model._get_current_capture_annotations()
+        if annotations_dict is None:
+            return
+        
+        # FIXME: this seesms to assume that the order of the annotations dict is
+        # the same as the order of our rows, which may not always be true
+        keys = list(annotations_dict.keys())
+        if row < 0 or row >= len(keys):
+            return
+        
+        annotation_id = keys[row]
+        annotation = annotations_dict[annotation_id]
+        
+        # Convert annotation to dict for editing
+        annotation_data = dict(annotation)
+        
+        # Get label for dialog title
+        label = annotation.get(sigmf.SigMFFile.LABEL_KEY, f"Annotation {row}")
+        
+        dialog = JSONEditorDialog(
+            parent=self,
+            json_data=annotation_data,
+            read_only=False,  # Allow editing
+            title=f"Annotation JSON - {label}"
+        )
+        
+        if dialog.exec_():
+            # User clicked OK, update the annotation with the edited data
+            edited_data = dialog.get_json()
+            if edited_data is not None:
+                try:
+                    # Update the annotation with the edited data
+                    annotation.clear()
+                    annotation.update(edited_data)
+                    # Emit signal to update the view
+                    app_state = QApplication.instance().app_state
+                    app_state.annotation_changed.emit(annotation_id, LoadedDictAction.MODIFIED)
+                except Exception as e:
+                    log.error(f"Error updating annotation from JSON: {e}")
 
     def get_application(self):
         return self.parent().application
