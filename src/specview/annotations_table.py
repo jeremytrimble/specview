@@ -21,6 +21,7 @@ class AnnotationsModel(QAbstractTableModel):
         self._connect_app_signals()
 
         self._column_names = (
+            "Visible",
             "Label",
             "Start Time",
             "End Time",
@@ -33,14 +34,15 @@ class AnnotationsModel(QAbstractTableModel):
         )
         # Define which columns are editable
         self._editable_columns = {
-            0,  # Label
-            1,  # Start Time
-            2,  # End Time
-            3,  # Duration
-            4,  # Low Freq
-            5,  # Center Freq
-            6,  # High Freq
-            7,  # Bandwidth
+            0,  # Visible
+            1,  # Label
+            2,  # Start Time
+            3,  # End Time
+            4,  # Duration
+            5,  # Low Freq
+            6,  # Center Freq
+            7,  # High Freq
+            8,  # Bandwidth
         }
         self._NUM_COLUMNS = len(self._column_names)
 
@@ -93,7 +95,11 @@ class AnnotationsModel(QAbstractTableModel):
     def flags(self, index):
         base_flags = super().flags(index)
         if index.column() in self._editable_columns:
-            return base_flags | Qt.ItemIsEditable
+            flags = base_flags | Qt.ItemIsEditable
+            # Make the visible column checkable
+            if index.column() == 0:
+                flags |= Qt.ItemIsUserCheckable
+            return flags
         return base_flags
 
     def data(self, index, role=None):
@@ -110,90 +116,123 @@ class AnnotationsModel(QAbstractTableModel):
         
         if role == Qt.DisplayRole:
             if col == 0:
-                return annotation.get(sigmf.SigMFFile.LABEL_KEY, "--")
+                # Visible column - don't show text, just checkbox
+                return ""
             elif col == 1:
+                return annotation.get(sigmf.SigMFFile.LABEL_KEY, "--")
+            elif col == 2:
                 v = annotation.get_start_time_sec(self._current_capture_id)
                 if v is None:
                     return "--"
                 else:
                     return duration_format(v)
-            elif col == 2:
+            elif col == 3:
                 v = annotation.get_end_time_sec(self._current_capture_id)
                 if v is None:
                     return "--"
                 else:
                     return duration_format(v)
-            elif col == 3:
+            elif col == 4:
                 v = annotation.duration_sec
                 if v is None:
                     return "--"
                 else:
                     return duration_format(v)
-            elif col == 4:
+            elif col == 5:
                 v = annotation.low_frequency_Hz
                 if v is None:
                     return "--"
                 else:
                     return freq_format(v)
-            elif col == 5:
+            elif col == 6:
                 v = annotation.center_frequency_Hz
                 if v is None:
                     return "--"
                 else:
                     return freq_format(v)
-            elif col == 6:
+            elif col == 7:
                 v = annotation.high_frequency_Hz
                 if v is None:
                     return "--"
                 else:
                     return freq_format(v)
-            elif col == 7:
+            elif col == 8:
                 v = annotation.bandwidth_Hz
                 if v is None:
                     return "--"
                 else:
                     return freq_format(v)
-            elif col == 8:
+            elif col == 9:
                 return "TODO"   # put more here
+        
+        elif role == Qt.CheckStateRole:
+            # Only handle checkbox for the visible column
+            if col == 0:
+                return Qt.Checked if annotation.visible else Qt.Unchecked
         
         elif role == Qt.UserRole:
             # Return raw comparable values for sorting
             if col == 0:
+                # Visible - return boolean for sorting
+                return annotation.visible
+            elif col == 1:
                 # Label - return string for lexicographic sorting
                 return annotation.get(sigmf.SigMFFile.LABEL_KEY, "")
-            elif col == 1:
+            elif col == 2:
                 # Start Time - return numeric value or inf for None
                 v = annotation.get_start_time_sec(self._current_capture_id)
                 return v if v is not None else float('inf')
-            elif col == 2:
+            elif col == 3:
                 # End Time - return numeric value or inf for None
                 v = annotation.get_end_time_sec(self._current_capture_id)
                 return v if v is not None else float('inf')
-            elif col == 3:
+            elif col == 4:
                 # Duration - return numeric value or inf for None
                 v = annotation.duration_sec
                 return v if v is not None else float('inf')
-            elif col == 4:
+            elif col == 5:
                 # Low Freq - return numeric value or inf for None
                 v = annotation.low_frequency_Hz
                 return v if v is not None else float('inf')
-            elif col == 5:
+            elif col == 6:
                 # Center Freq - return numeric value or inf for None
                 v = annotation.center_frequency_Hz
                 return v if v is not None else float('inf')
-            elif col == 6:
+            elif col == 7:
                 # High Freq - return numeric value or inf for None
                 v = annotation.high_frequency_Hz
                 return v if v is not None else float('inf')
-            elif col == 7:
+            elif col == 8:
                 # Bandwidth - return numeric value or inf for None
                 v = annotation.bandwidth_Hz
                 return v if v is not None else float('inf')
-            elif col == 8:
+            elif col == 9:
                 # More Info - return string
                 return "TODO"
 
     def setData(self, index, value, role=Qt.EditRole):
+        # Handle checkbox state changes
+        if role == Qt.CheckStateRole:
+            if index.column() == 0:  # Visible column
+                annotations_dict = self._get_current_capture_annotations()
+                if annotations_dict is None:
+                    return False
+                
+                keys = list(annotations_dict.keys())
+                row = index.row()
+                
+                if row < 0 or row >= len(keys):
+                    return False
+                
+                annotation = annotations_dict[keys[row]]
+                # Set visibility based on checkbox state
+                annotation.visible = (value == Qt.Checked)
+                
+                # Emit dataChanged signal to update the view
+                self.dataChanged.emit(index, index)
+                return True
+            return False
+        
         if role != Qt.EditRole:
             return False
 
@@ -212,51 +251,53 @@ class AnnotationsModel(QAbstractTableModel):
 
         annotation = annotations_dict[keys[row]]
         try:
-            if col == 0:  # Label
+            if col == 0:  # Visible (handled above via CheckStateRole)
+                return False
+            elif col == 1:  # Label
                 annotation[sigmf.SigMFFile.LABEL_KEY] = str(value)
-            elif col == 1:  # Start Time
+            elif col == 2:  # Start Time
                 try:
                     time_sec = parse_time_str(str(value))
                     annotation.set_start_time_sec(self._current_capture_id, time_sec)
                 except ValueError:
                     return False
-            elif col == 2:  # End Time
+            elif col == 3:  # End Time
                 try:
                     time_sec = parse_time_str(str(value))
                     annotation.set_end_time_sec(self._current_capture_id, time_sec)
                 except ValueError:
                     return False
-            elif col == 4:  # Low Freq
+            elif col == 5:  # Low Freq
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.low_frequency_Hz = freq
                 except ValueError:
                     return False
-            elif col == 5:  # Center Freq
+            elif col == 6:  # Center Freq
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.center_frequency_Hz = freq
                 except ValueError:
                     return False
-            elif col == 6:  # High Freq
+            elif col == 7:  # High Freq
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.high_frequency_Hz = freq
                 except ValueError:
                     return False
-            elif col == 3:  # Duration
+            elif col == 4:  # Duration
                 try:
                     duration_sec = parse_time_str(str(value))
                     annotation.duration_sec = duration_sec  # This will update end time keeping start time fixed
                 except ValueError:
                     return False
-            elif col == 5:  # Center Freq
+            elif col == 6:  # Center Freq
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.center_frequency_Hz = freq  # This will update high/low keeping bandwidth fixed
                 except ValueError:
                     return False
-            elif col == 7:  # Bandwidth
+            elif col == 8:  # Bandwidth
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.bandwidth_Hz = freq  # This will update high/low keeping center fixed

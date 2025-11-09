@@ -153,6 +153,7 @@ class LoadedAnnotationDict(dict):
         rv._annotation_id = annotation_id
         rv._deactivated = False
         rv._is_updating = False  # Instance-level flag to prevent recursive updates
+        rv._visible = True  # Annotations are visible by default
         return rv
 
     @property
@@ -232,6 +233,30 @@ class LoadedAnnotationDict(dict):
     @property
     def annotation_id(self) -> AnnotationID:
         return self._annotation_id
+
+    @property
+    def visible(self) -> bool:
+        """
+        Get the visibility state of this annotation.
+        
+        Returns:
+            True if the annotation should be visible in the UI, False otherwise
+        """
+        return self._visible
+    
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        """
+        Set the visibility state of this annotation.
+        
+        Args:
+            value: True to make the annotation visible, False to hide it
+        """
+        if self._visible != value:
+            self._visible = value
+            # Notify parent that the annotation has been modified
+            # This will trigger UI updates without changing the underlying dictionary
+            self._notify_parent_that_i_was_modified()
 
     def get_frequency_range_Hz(self) -> tuple[float,float]|None:
         f_lo = self.get(sigmf.SigMFFile.FLO_KEY)
