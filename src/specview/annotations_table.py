@@ -455,9 +455,6 @@ class AnnotationsTable(QWidget):
                     # Update the annotation with the edited data
                     annotation.clear()
                     annotation.update(edited_data)
-                    # Emit signal to update the view
-                    app_state = QApplication.instance().app_state
-                    app_state.annotation_changed.emit(annotation_id, LoadedDictAction.MODIFIED)
                 except Exception as e:
                     log.error(f"Error updating annotation from JSON: {e}")
 
