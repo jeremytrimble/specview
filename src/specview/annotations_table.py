@@ -313,14 +313,26 @@ class AnnotationsModel(QAbstractTableModel):
             log.error(f"Error updating annotation: {e}")
             return False
 
+class AnnotationsSortFilterProxyModel(QSortFilterProxyModel):
+    """Custom proxy model that prevents sorting on the Visible column."""
+    
+    def lessThan(self, left, right):
+        """Override to prevent sorting on column 0 (Visible)."""
+        # If trying to sort by the Visible column, don't actually sort
+        if left.column() == 0:
+            return False
+        
+        # For other columns, use the default sorting behavior
+        return super().lessThan(left, right)
+
 class AnnotationsTable(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.table = QTableView(self)
         self.model = AnnotationsModel(self)
         
-        # Create and configure proxy model for sorting
-        self.proxy_model = QSortFilterProxyModel(self)
+        # Create and configure custom proxy model for sorting
+        self.proxy_model = AnnotationsSortFilterProxyModel(self)
         self.proxy_model.setSourceModel(self.model)
         self.proxy_model.setSortRole(Qt.UserRole)
         self.proxy_model.setDynamicSortFilter(True)
@@ -349,7 +361,13 @@ class AnnotationsTable(QWidget):
         self.model.layoutChanged.connect(self.table.resizeColumnsToContents)
 
     def _on_header_clicked(self, logical_index):
-        """Handle header clicks to toggle sort order."""
+        """Handle header clicks to toggle sort order or visibility."""
+        # Special handling for the Visible column (column 0)
+        if logical_index == 0:
+            self._toggle_all_annotations_visibility()
+            return
+        
+        # Normal sorting behavior for other columns
         if logical_index == self._current_sort_column:
             # Toggle sort order for the same column
             if self._current_sort_order == Qt.AscendingOrder:
@@ -366,6 +384,23 @@ class AnnotationsTable(QWidget):
         
         # Update header sort indicator
         self.table.horizontalHeader().setSortIndicator(self._current_sort_column, self._current_sort_order)
+
+    def _toggle_all_annotations_visibility(self):
+        """Toggle visibility for all annotations in the current capture."""
+        annotations_dict = self.model._get_current_capture_annotations()
+        if annotations_dict is None or len(annotations_dict) == 0:
+            return
+        
+        # Determine if we should show all or hide all
+        # If any annotation is hidden, show all. Otherwise, hide all.
+        any_hidden = any(not ann.visible for ann in annotations_dict.values())
+        
+        # Toggle all annotations
+        for annotation in annotations_dict.values():
+            annotation.visible = any_hidden
+        
+        # The visibility changes will trigger annotation_changed signals,
+        # which will update the views automatically
 
     def _on_context_menu(self, position):
         """Show context menu for table rows."""
