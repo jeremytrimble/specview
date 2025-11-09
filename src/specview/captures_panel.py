@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QTreeView, QTreeWidgetItem, QVBoxLayout, QSplitter, QWidget, 
     QTreeWidget, QApplication, QAbstractItemView, QLabel, QFormLayout,
-    QPushButton
+    QPushButton, QMenu
 )
 from PyQt5.QtCore import Qt
 
@@ -30,6 +30,8 @@ class CapturesPanel(QWidget):
         self.tree_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tree_widget.setColumnCount(4)
         self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq", "Duration", "Date/Time"])
+        self.tree_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree_widget.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.captures_layout.addWidget(self.tree_widget)
         
         self.splitter.addWidget(self.captures_widget)
@@ -67,7 +69,7 @@ class CapturesPanel(QWidget):
         self.metadata_layout.addRow(self.author_label, self.author_value)
 
         # Add button to view full JSON metadata
-        self.view_json_button = QPushButton("View Raw JSON", self)
+        self.view_json_button = QPushButton("View JSON Globals", self)
         self.view_json_button.clicked.connect(self._on_view_json_clicked)
         self.view_json_button.setEnabled(False)  # Disabled until a capture is selected
         self.metadata_layout.addRow("", self.view_json_button)
@@ -151,6 +153,43 @@ class CapturesPanel(QWidget):
             json_data=global_metadata,
             read_only=True,
             title=f"Global SigMF Metadata - {loaded_file.file_path.name}"
+        )
+        dialog.exec_()
+
+    def _on_tree_context_menu(self, position):
+        """Show context menu for tree items."""
+        item = self.tree_widget.itemAt(position)
+        if item is None:
+            return
+        
+        # Only show menu for capture items (not file items)
+        if not hasattr(item, "capture_id"):
+            return
+        
+        menu = QMenu(self)
+        view_json_action = menu.addAction("View Capture JSON")
+        
+        action = menu.exec_(self.tree_widget.viewport().mapToGlobal(position))
+        
+        if action == view_json_action:
+            self._view_capture_json(item.capture_id)
+    
+    def _view_capture_json(self, capture_id: str):
+        """Open a dialog to view the capture's raw JSON metadata."""
+        app_state = self._get_app_state()
+        capture = app_state.get_capture_by_id(capture_id)
+        
+        if capture is None:
+            return
+        
+        # Get the capture annotation data (which contains all the capture metadata)
+        capture_data = dict(capture)  # Convert the capture object to a dict
+        
+        dialog = JSONEditorDialog(
+            parent=self,
+            json_data=capture_data,
+            read_only=True,
+            title=f"Capture Metadata - {capture.parent_loadedfile.file_path.name} - Capture {capture.capture_idx_in_file:02d}"
         )
         dialog.exec_()
 
