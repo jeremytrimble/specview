@@ -28,28 +28,40 @@ class JSONSyntaxHighlighter(QSyntaxHighlighter):
         """Set the position and length of the error to highlight."""
         self.error_pos = pos
         self.error_length = length
-        self.rehighlight()
+        try:
+            self.rehighlight()
+        except RuntimeError:
+            # Can happen if the document is being deleted or in an invalid state
+            pass
 
     def clear_error(self) -> None:
         """Clear any existing error highlighting."""
         self.error_pos = None
         self.error_length = 0
-        self.rehighlight()
+        try:
+            self.rehighlight()
+        except RuntimeError:
+            # Can happen if the document is being deleted or in an invalid state
+            pass
 
     def highlightBlock(self, text: Optional[str]) -> None:
         """Highlight the error in the text if it exists in this block."""
         if self.error_pos is None or text is None:
             return
-
-        block_pos = self.currentBlock().position()
-        block_length = len(text)
-        error_start = self.error_pos - block_pos
         
-        # Check if the error is in this block
-        if 0 <= error_start < block_length:
-            error_end = min(error_start + self.error_length, block_length)
-            if error_start < error_end:
-                self.setFormat(error_start, error_end - error_start, self.error_format)
+        try:
+            block_pos = self.currentBlock().position()
+            block_length = len(text)
+            error_start = self.error_pos - block_pos
+            
+            # Check if the error is in this block
+            if 0 <= error_start < block_length:
+                error_end = min(error_start + self.error_length, block_length)
+                if error_start < error_end:
+                    self.setFormat(error_start, error_end - error_start, self.error_format)
+        except RuntimeError:
+            # Can happen if the document is being deleted or in an invalid state
+            pass
 
 
 class JSONEditorDialog(QDialog):
@@ -72,6 +84,7 @@ class JSONEditorDialog(QDialog):
         """
         super().__init__(parent)
         self._validation_in_progress = False
+        self._read_only = read_only
         self.setWindowTitle(title)
         self.resize(600, 400)  # Set a reasonable default size
 
@@ -83,12 +96,9 @@ class JSONEditorDialog(QDialog):
         self.text_editor = QPlainTextEdit()
         if read_only:
             self.text_editor.setReadOnly(True)
-        else:
-            # Only set up error checking if the editor is editable
-            self.text_editor.textChanged.connect(self.validate_json)
         layout.addWidget(self.text_editor)
 
-        # Create syntax highlighter
+        # Create syntax highlighter (but don't connect signals yet if we're setting initial data)
         self.highlighter = JSONSyntaxHighlighter(self.text_editor.document())
 
         # Create error label (hidden by default)
@@ -108,9 +118,13 @@ class JSONEditorDialog(QDialog):
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
 
-        # Set the JSON content if provided
+        # Set the JSON content if provided (before connecting signals to avoid triggering validation during init)
         if json_data is not None:
             self.set_json(json_data)
+        
+        # Now connect the text changed signal for editable editors (after initial content is set)
+        if not read_only:
+            self.text_editor.textChanged.connect(self.validate_json)
 
 
 
