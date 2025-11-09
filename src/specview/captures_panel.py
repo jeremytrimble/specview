@@ -1,11 +1,13 @@
 from PyQt5.QtWidgets import (
     QTreeView, QTreeWidgetItem, QVBoxLayout, QSplitter, QWidget, 
-    QTreeWidget, QApplication, QAbstractItemView, QLabel, QFormLayout
+    QTreeWidget, QApplication, QAbstractItemView, QLabel, QFormLayout,
+    QPushButton
 )
 from PyQt5.QtCore import Qt
 
 from .loaded_file_mgmt import LoadedFile
 from .util import duration_format, freq_format
+from .json_editor_dialog import JSONEditorDialog
 
 from .app_state import AppState 
 
@@ -64,6 +66,12 @@ class CapturesPanel(QWidget):
         self.author_value = QLabel("", self)
         self.metadata_layout.addRow(self.author_label, self.author_value)
 
+        # Add button to view full JSON metadata
+        self.view_json_button = QPushButton("View Raw JSON", self)
+        self.view_json_button.clicked.connect(self._on_view_json_clicked)
+        self.view_json_button.setEnabled(False)  # Disabled until a capture is selected
+        self.metadata_layout.addRow("", self.view_json_button)
+
         for label in [self.file_path_value, self.sample_rate_value, self.duration_value,
                       self.num_channels_value, self.datatype_value,
                       self.description_value, self.author_value]:
@@ -110,7 +118,12 @@ class CapturesPanel(QWidget):
 
         app_state = self._get_app_state()
         loaded_file = app_state._loaded_files.get_capture_from_id(capture_id).parent_loadedfile
-        
+
+        if capture_id:
+            self.view_json_button.setEnabled(True)  # Enable button when a capture is selected
+        else:
+            self.view_json_button.setEnabled(False)  # Disable button when no capture is selected
+
         sigmf_meta = loaded_file.sigmf_file.get_global_info()
         self.file_path_value.setText(str(loaded_file.file_path))
         self.sample_rate_value.setText(freq_format(loaded_file.sample_rate_Hz))
@@ -120,6 +133,26 @@ class CapturesPanel(QWidget):
         self.description_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.DESCRIPTION_KEY, "N/A")))
         self.author_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.AUTHOR_KEY, "N/A")))
         
+    def _on_view_json_clicked(self):
+        """Open a dialog to view the full global metadata as JSON."""
+
+        app_state = self._get_app_state()
+        if app_state._selected_capture is None:
+            return
+        capture = app_state.get_capture_by_id(app_state._selected_capture)
+        if capture is None:
+            return
+        loaded_file = capture.parent_loadedfile
+
+        global_metadata = loaded_file.sigmf_file.get_global_info()
+        
+        dialog = JSONEditorDialog(
+            parent=self,
+            json_data=global_metadata,
+            read_only=True,
+            title=f"Global SigMF Metadata - {loaded_file.file_path.name}"
+        )
+        dialog.exec_()
 
     def populate_tree(self):
         app_state = self._get_app_state()
