@@ -84,9 +84,10 @@ def create_annotation_from_selection() -> None:
     except Exception as e:
         log.error(f"Failed to create annotation: {e}")
 
-def show_all_annotations() -> None:
+def _get_annotations_dict():
     """
-    Show all annotations in the current capture.
+    Get the annotations dictionary for the current capture.
+    Returns None if no capture is selected or capture not found.
     """
     app_state: AppState = QApplication.instance().app_state  # type: ignore[union-attr]
     
@@ -94,83 +95,62 @@ def show_all_annotations() -> None:
     selected_capture_id = app_state._selected_capture
     if selected_capture_id is None:
         log.warning("No capture selected.")
-        return
+        return None
     
     # Get the capture dictionary
     capture = app_state.get_capture_by_id(selected_capture_id)
     if capture is None:
         log.warning(f"Capture {selected_capture_id} not found.")
-        return
+        return None
     
     # Get all annotations for this capture's parent file
-    annotations_dict = capture.parent_loadedfile.get_annotations_dict()
+    return capture.parent_loadedfile.get_annotations_dict()
+
+def set_all_annotations_visible(visible: bool) -> None:
+    """
+    Set visibility for all annotations in the current capture.
     
-    # Show all annotations
+    Args:
+        visible: True to show all annotations, False to hide all annotations
+    """
+    annotations_dict = _get_annotations_dict()
+    if annotations_dict is None:
+        return
+    
+    # Set visibility for all annotations
     count = 0
     for annotation in annotations_dict.values():
-        if not annotation.visible:
-            annotation.visible = True
+        if annotation.visible != visible:
+            annotation.visible = visible
             count += 1
     
     if count > 0:
-        log.info(f"Showed {count} annotation(s)")
+        action = "Showed" if visible else "Hid"
+        log.info(f"{action} {count} annotation(s)")
     else:
-        log.info("All annotations are already visible")
+        status = "visible" if visible else "hidden"
+        log.info(f"All annotations are already {status}")
+
+def show_all_annotations() -> None:
+    """
+    Show all annotations in the current capture.
+    """
+    set_all_annotations_visible(True)
 
 def hide_all_annotations() -> None:
     """
     Hide all annotations in the current capture.
     """
-    app_state: AppState = QApplication.instance().app_state  # type: ignore[union-attr]
-    
-    # Get the selected capture
-    selected_capture_id = app_state._selected_capture
-    if selected_capture_id is None:
-        log.warning("No capture selected.")
-        return
-    
-    # Get the capture dictionary
-    capture = app_state.get_capture_by_id(selected_capture_id)
-    if capture is None:
-        log.warning(f"Capture {selected_capture_id} not found.")
-        return
-    
-    # Get all annotations for this capture's parent file
-    annotations_dict = capture.parent_loadedfile.get_annotations_dict()
-    
-    # Hide all annotations
-    count = 0
-    for annotation in annotations_dict.values():
-        if annotation.visible:
-            annotation.visible = False
-            count += 1
-    
-    if count > 0:
-        log.info(f"Hid {count} annotation(s)")
-    else:
-        log.info("All annotations are already hidden")
+    set_all_annotations_visible(False)
 
 def toggle_all_annotations() -> None:
     """
     Toggle visibility for all annotations in the current capture.
     If any annotation is hidden, show all. Otherwise, hide all.
     """
-    app_state: AppState = QApplication.instance().app_state  # type: ignore[union-attr]
-    
-    # Get the selected capture
-    selected_capture_id = app_state._selected_capture
-    if selected_capture_id is None:
-        log.warning("No capture selected.")
+    annotations_dict = _get_annotations_dict()
+    if annotations_dict is None:
         return
-    
-    # Get the capture dictionary
-    capture = app_state.get_capture_by_id(selected_capture_id)
-    if capture is None:
-        log.warning(f"Capture {selected_capture_id} not found.")
-        return
-    
-    # Get all annotations for this capture's parent file
-    annotations_dict = capture.parent_loadedfile.get_annotations_dict()
     
     if len(annotations_dict) == 0:
         log.info("No annotations to toggle")
@@ -180,14 +160,10 @@ def toggle_all_annotations() -> None:
     # If any annotation is hidden, show all. Otherwise, hide all.
     any_hidden = any(not ann.visible for ann in annotations_dict.values())
     
-    # Toggle all annotations
-    for annotation in annotations_dict.values():
-        annotation.visible = any_hidden
-    
     if any_hidden:
-        log.info(f"Showed all annotations")
+        show_all_annotations()
     else:
-        log.info(f"Hid all annotations")
+        hide_all_annotations()
 
 def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     """
