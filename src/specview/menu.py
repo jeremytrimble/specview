@@ -242,15 +242,15 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
 
     show_all_action = QAction(text="Show All Annotations", parent=parent)
     #show_all_action.setShortcut("Ctrl+E")
-    show_all_action.triggered.connect(lambda: show_all_annotations())
+    show_all_action.triggered.connect(show_all_annotations)
     
     hide_all_action = QAction(text="Hide All Annotations", parent=parent)
     #hide_all_action.setShortcut("Ctrl+Shift+E")
-    hide_all_action.triggered.connect(lambda: hide_all_annotations())
+    hide_all_action.triggered.connect(hide_all_annotations)
     
     toggle_all_action = QAction(text="Toggle All Annotations", parent=parent)
     toggle_all_action.setShortcut("Ctrl+R")
-    toggle_all_action.triggered.connect(lambda: toggle_all_annotations())
+    toggle_all_action.triggered.connect(toggle_all_annotations)
 
     annotations_menu = QMenu("&Annotations", menu_bar)
     annotations_menu.addAction(annotation_from_selection)
