@@ -240,7 +240,7 @@ class AnnotationsModel(QAbstractTableModel):
         if annotations_dict is None:
             return False
 
-        # FIXME: this seesms to assume that the order of the annotations dict is
+        # FIXME: this seems to assume that the order of the annotations dict is
         # the same as the order of our rows, which may not always be true
         keys = list(annotations_dict.keys())
         row = index.row()
