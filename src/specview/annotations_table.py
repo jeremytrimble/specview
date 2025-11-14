@@ -267,6 +267,12 @@ class AnnotationsModel(QAbstractTableModel):
                     annotation.set_end_time_sec(self._current_capture_id, time_sec)
                 except ValueError:
                     return False
+            elif col == 4:  # Duration
+                try:
+                    duration_sec = parse_time_str(str(value))
+                    annotation.duration_sec = duration_sec  # This will update end time keeping start time fixed
+                except ValueError:
+                    return False
             elif col == 5:  # Low Freq
                 try:
                     freq = parse_freq_str(str(value))
@@ -283,18 +289,6 @@ class AnnotationsModel(QAbstractTableModel):
                 try:
                     freq = parse_freq_str(str(value))
                     annotation.high_frequency_Hz = freq
-                except ValueError:
-                    return False
-            elif col == 4:  # Duration
-                try:
-                    duration_sec = parse_time_str(str(value))
-                    annotation.duration_sec = duration_sec  # This will update end time keeping start time fixed
-                except ValueError:
-                    return False
-            elif col == 6:  # Center Freq
-                try:
-                    freq = parse_freq_str(str(value))
-                    annotation.center_frequency_Hz = freq  # This will update high/low keeping bandwidth fixed
                 except ValueError:
                     return False
             elif col == 8:  # Bandwidth
