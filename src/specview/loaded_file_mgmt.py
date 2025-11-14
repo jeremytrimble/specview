@@ -256,6 +256,9 @@ class LoadedAnnotationDict(dict):
             self._visible = value
             # Notify parent that the annotation has been modified
             # This will trigger UI updates without changing the underlying dictionary
+            # Note: this could be emitted as a different type of signal in the
+            # future if we want to separate content changes from visibility
+            # changes
             self._notify_parent_that_i_was_modified()
 
     def get_frequency_range_Hz(self) -> tuple[float,float]|None:

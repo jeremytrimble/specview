@@ -387,6 +387,8 @@ class AnnotationsTable(QWidget):
 
     def _toggle_all_annotations_visibility(self):
         """Toggle visibility for all annotations in the current capture."""
+        # Note: This code is somewhat duplicative of the annotation toggling
+        # code in the menu and could be consolidated in the future.
         annotations_dict = self.model._get_current_capture_annotations()
         if annotations_dict is None or len(annotations_dict) == 0:
             return
