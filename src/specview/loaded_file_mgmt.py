@@ -271,8 +271,9 @@ class LoadedAnnotationDict(dict):
     
     def get_time_range_relative_to_capture(self, capture_id:CaptureID) -> tuple[float,float]|None:
         parent: LoadedFile = self._parent_loadedfile
-        capture = parent._capture_id_to_capture[capture_id]
-        return get_annotation_time_bound_relative_to_current_capture(self, capture.capture_idx_in_file, parent.sigmf_file)
+        if capture := parent._capture_id_to_capture.get(capture_id):
+            return get_annotation_time_bound_relative_to_current_capture(self, capture.capture_idx_in_file, parent.sigmf_file)
+        return None
 
     def get_time_axis_for_capture(self, capture_id:CaptureID) -> MonotonicAxis:
         """Returns a MonotonicAxis that maps sample indexes to floating-point time in seconds 

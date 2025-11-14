@@ -110,7 +110,7 @@ class CapturesPanel(QWidget):
         app_state = self._get_app_state()
         app_state.set_selected_capture(capture_id=selected.capture_id)
 
-    def on_capture_changed(self, capture_id: str):
+    def on_capture_changed(self, capture_id: str|None):
         # Clear metadata display
         self.sample_rate_value.setText("")
         self.num_channels_value.setText("")
@@ -118,13 +118,14 @@ class CapturesPanel(QWidget):
         self.description_value.setText("")
         self.author_value.setText("")
 
-        app_state = self._get_app_state()
-        loaded_file = app_state._loaded_files.get_capture_from_id(capture_id).parent_loadedfile
-
-        if capture_id:
+        if capture_id is not None:
             self.view_json_button.setEnabled(True)  # Enable button when a capture is selected
         else:
             self.view_json_button.setEnabled(False)  # Disable button when no capture is selected
+            return
+
+        app_state = self._get_app_state()
+        loaded_file = app_state._loaded_files.get_capture_from_id(capture_id).parent_loadedfile
 
         sigmf_meta = loaded_file.sigmf_file.get_global_info()
         self.file_path_value.setText(str(loaded_file.file_path))
