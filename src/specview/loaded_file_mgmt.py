@@ -19,6 +19,8 @@ from .chunkwise_compute import (
     FrequencyDomainComputationSpec, DEFAULT_FREQ_COMPUTATION_SPEC
 )
 
+import logging
+log = logging.getLogger("loaded_file_mgmt")
 
 import random
 rnd = random.Random(42)
@@ -609,8 +611,21 @@ class LoadedFile:
             self._has_unsaved_changes = True
         
         if action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
-            self._annotation_id_to_annotation.pop(annotation_id, None) # remove from our own mapping
+            log.debug(f"Removing annotation ID {annotation_id} from LoadedFile {self.file_id} due to action {action}")
             self._parent_loaded_files._annotation_id_to_annotations.pop(annotation_id, None) # remove from the global mapping
+            annotation = self._annotation_id_to_annotation.pop(annotation_id, None) # remove from our own mapping
+            if annotation is not None:
+                self._remove_annotation_from_sigmf_file(annotation)
+
+    def _remove_annotation_from_sigmf_file(self, annotation: LoadedAnnotationDict) -> None:
+        annotations_list : list[dict] = self._sigmf_file.get_annotations()
+        idx = annotations_list.index(annotation._underlying_dict)
+        if idx >= 0:
+            log.debug(f"Removing annotation at index {idx} from SigMFFile for LoadedFile {self.file_id}")
+            # deletes from the list held by the SigMFFile in-place, there is no
+            # need to re-set the annotations list
+            del annotations_list[idx]   
+
 
     def _get_next_capture_id(self) -> CaptureID:
         """
