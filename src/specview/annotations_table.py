@@ -1,7 +1,7 @@
-from PyQt5.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout, QMenu
+from PyQt5.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel, QModelIndex
+from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout, QMenu, QMessageBox
 
-from .loaded_file_mgmt import LoadedDictAction, AnnotationID, CaptureID
+from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
 from .json_editor_dialog import JSONEditorDialog
 
 from .app_state import AppState
@@ -46,6 +46,11 @@ class AnnotationsModel(QAbstractTableModel):
         }
         self._NUM_COLUMNS = len(self._column_names)
 
+        # An ordered list of the current annotations referenced by this model.
+        # (Note, this is not used to directly set the row order, as the
+        # proxymodel does that.)
+        self._annotation_id_list: list[AnnotationID] = []
+
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
 
@@ -56,10 +61,25 @@ class AnnotationsModel(QAbstractTableModel):
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
         self._current_capture_id = capture_id
-        # layoutChanged indicates that the SHAPE of the model has changed,
-        # dataChanged is for when just some elements of the data have changed
-        # but the shape remains the same
-        self.layoutChanged.emit() 
+
+        app_state = self._get_app_state()
+        if capture := app_state._loaded_files.get_capture_from_id(capture_id):
+            parent_file = capture.parent_loadedfile
+            new_annotations_dict = parent_file.get_annotations_dict()
+
+            # layoutChanged indicates that the SHAPE of the model has changed,
+            # dataChanged is for when just some elements of the data have changed
+            # but the shape remains the same
+            #self.layoutAboutToBeChanged.emit()
+            #self.layoutChanged.emit() 
+
+            self.modelAboutToBeReset.emit()
+            self._annotation_id_list = list(new_annotations_dict.keys())
+            self.resetInternalData()
+            self.modelReset.emit()
+        else:
+            log.info(f"Setting annotations model to empty for capture_id={capture_id}")
+            self._annotation_id_list = []
 
     def _on_annotation_changed(self, annotation_id:AnnotationID, action: LoadedDictAction):
         if action == LoadedDictAction.MODIFIED:
@@ -67,21 +87,47 @@ class AnnotationsModel(QAbstractTableModel):
             bottom_right = self.createIndex(self.rowCount(None) - 1, self.columnCount(None) - 1)
             self.dataChanged.emit(top_left, bottom_right)
         elif action in (LoadedDictAction.LOADED, LoadedDictAction.ADDED, LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
-            self.layoutChanged.emit()
+            #self.layoutAboutToBeChanged.emit()
+            if action == LoadedDictAction.DELETED:
 
-    def _get_current_capture_annotations(self):
-        if self._current_capture_id is None:
-            return None
-        app_state = self._get_app_state()
-        annotations_dict = app_state._loaded_files.get_capture_from_id(self._current_capture_id).parent_loadedfile.get_annotations_dict()
-        return annotations_dict
+                try:
+                    row_idx_to_remove = self._annotation_id_list.index(annotation_id)
+                except ValueError:
+                    log.warning(f"Attempted to delete annotation ID {annotation_id} not in model")
+                    return
+
+                log.debug(f"Annotation deleted: {annotation_id}")
+                self.beginRemoveRows(QModelIndex(), row_idx_to_remove, row_idx_to_remove)
+                self.removeRow(row_idx_to_remove)
+                self._annotation_id_list.pop(row_idx_to_remove)
+                self.endRemoveRows()
+                log.debug(f"did the removerows dance for {annotation_id}")
+            else: # adding creating or loading
+
+                # check to see if this annotation is part of the current capture
+                if self._current_capture_id is None:
+                    log.debug(f"Skipping annotation {annotation_id=}, because no capture is selected")
+                    return
+                app_state = self._get_app_state()
+                current_capture = app_state._loaded_files.get_capture_from_id(self._current_capture_id)
+                parent_loadedfile = current_capture.parent_loadedfile
+                if annotation_id not in parent_loadedfile.get_annotations_dict():
+                    log.debug(f"Skipping annotation {annotation_id=}, because it is not part of the current capture")
+                else:
+                    log.debug(f"Annotation added: {annotation_id}")
+                    self.beginInsertRows(QModelIndex(), len(self._annotation_id_list), len(self._annotation_id_list))
+                    self._annotation_id_list.append(annotation_id)
+                    self.endInsertRows()
+                    log.debug(f"did the insertrows dance for {annotation_id}")
+
+            #self.layoutChanged.emit()
+
+            #self.modelAboutToBeReset.emit()
+            #self.modelReset.emit()
 
     def rowCount(self, index):
         # TODO: what is index for?
-        annotations_dict = self._get_current_capture_annotations()
-        if annotations_dict is None:
-            return 0
-        return len(annotations_dict)
+        return len(self._annotation_id_list)
 
     def columnCount(self, index):
         # TODO: what is index for?
@@ -102,17 +148,29 @@ class AnnotationsModel(QAbstractTableModel):
             return flags
         return base_flags
 
+    def _get_annotation_id_and_dict_for_row_idx(self, index:int):
+        if index < 0 or index >= len(self._annotation_id_list):
+            return None, None
+
+        annotation_id = self._annotation_id_list[index]
+        app_state = self._get_app_state()
+        annotation_dict = app_state._loaded_files._annotation_id_to_annotations.get(annotation_id)    
+
+        if annotation_dict is None:
+            return None, None
+        else:
+            return annotation_id, annotation_dict
+
     def data(self, index, role=None):
-        annotations_dict = self._get_current_capture_annotations()
-        if annotations_dict is None:
-            return
-        
-        keys = list(annotations_dict.keys())
         row = index.row()
-        col = index.column()
-        if row < 0 or row >= len(keys) or col < 0 or col >= self._NUM_COLUMNS:
+
+        _, annotation = self._get_annotation_id_and_dict_for_row_idx(row)
+        if annotation is None:
             return None
-        annotation = annotations_dict[keys[row]]
+
+        col = index.column()
+        if row < 0 or row >= len(self._annotation_id_list) or col < 0 or col >= self._NUM_COLUMNS:
+            return None
         
         if role == Qt.DisplayRole:
             if col == 0:
@@ -212,21 +270,18 @@ class AnnotationsModel(QAbstractTableModel):
 
     def setData(self, index, value, role=Qt.EditRole):
         # Handle checkbox state changes
+        
+        row = index.row()
+
+        _, annotation_dict = self._get_annotation_id_and_dict_for_row_idx(row)
+        if annotation_dict is None:
+            return False
+
         if role == Qt.CheckStateRole:
             if index.column() == 0:  # Visible column
-                annotations_dict = self._get_current_capture_annotations()
-                if annotations_dict is None:
-                    return False
-                
-                keys = list(annotations_dict.keys())
-                row = index.row()
-                
-                if row < 0 or row >= len(keys):
-                    return False
-                
-                annotation = annotations_dict[keys[row]]
+
                 # Set visibility based on checkbox state
-                annotation.visible = (value == Qt.Checked)
+                annotation_dict.visible = (value == Qt.Checked)
                 
                 # Emit dataChanged signal to update the view
                 self.dataChanged.emit(index, index)
@@ -236,65 +291,53 @@ class AnnotationsModel(QAbstractTableModel):
         if role != Qt.EditRole:
             return False
 
-        annotations_dict = self._get_current_capture_annotations()
-        if annotations_dict is None:
-            return False
-
-        # FIXME: this seems to assume that the order of the annotations dict is
-        # the same as the order of our rows, which may not always be true
-        keys = list(annotations_dict.keys())
-        row = index.row()
         col = index.column()
 
-        if row < 0 or row >= len(keys):
-            return False
-
-        annotation = annotations_dict[keys[row]]
         try:
             if col == 0:  # Visible (handled above via CheckStateRole)
                 return False
             elif col == 1:  # Label
-                annotation[sigmf.SigMFFile.LABEL_KEY] = str(value)
+                annotation_dict[sigmf.SigMFFile.LABEL_KEY] = str(value)
             elif col == 2:  # Start Time
                 try:
                     time_sec = parse_time_str(str(value))
-                    annotation.set_start_time_sec(self._current_capture_id, time_sec)
+                    annotation_dict.set_start_time_sec(self._current_capture_id, time_sec)
                 except ValueError:
                     return False
             elif col == 3:  # End Time
                 try:
                     time_sec = parse_time_str(str(value))
-                    annotation.set_end_time_sec(self._current_capture_id, time_sec)
+                    annotation_dict.set_end_time_sec(self._current_capture_id, time_sec)
                 except ValueError:
                     return False
             elif col == 4:  # Duration
                 try:
                     duration_sec = parse_time_str(str(value))
-                    annotation.duration_sec = duration_sec  # This will update end time keeping start time fixed
+                    annotation_dict.duration_sec = duration_sec  # This will update end time keeping start time fixed
                 except ValueError:
                     return False
             elif col == 5:  # Low Freq
                 try:
                     freq = parse_freq_str(str(value))
-                    annotation.low_frequency_Hz = freq
+                    annotation_dict.low_frequency_Hz = freq
                 except ValueError:
                     return False
             elif col == 6:  # Center Freq
                 try:
                     freq = parse_freq_str(str(value))
-                    annotation.center_frequency_Hz = freq
+                    annotation_dict.center_frequency_Hz = freq
                 except ValueError:
                     return False
             elif col == 7:  # High Freq
                 try:
                     freq = parse_freq_str(str(value))
-                    annotation.high_frequency_Hz = freq
+                    annotation_dict.high_frequency_Hz = freq
                 except ValueError:
                     return False
             elif col == 8:  # Bandwidth
                 try:
                     freq = parse_freq_str(str(value))
-                    annotation.bandwidth_Hz = freq  # This will update high/low keeping center fixed
+                    annotation_dict.bandwidth_Hz = freq  # This will update high/low keeping center fixed
                 except ValueError:
                     return False
             else:
@@ -335,6 +378,17 @@ class AnnotationsTable(QWidget):
         self.proxy_model.setSourceModel(self.model)
         self.proxy_model.setSortRole(Qt.UserRole)
         self.proxy_model.setDynamicSortFilter(True)
+
+        #self.model.layoutAboutToBeChanged.connect(self.proxy_model.layoutAboutToBeChanged)
+        #self.model.layoutChanged.connect(self.proxy_model.layoutChanged)
+        #self.model.rowsAboutToBeRemoved.connect(self.proxy_model.rowsAboutToBeRemoved)
+        #self.model.rowsRemoved.connect(self.proxy_model.rowsRemoved)
+
+        self.model.layoutChanged.connect(self.proxy_model.invalidate)
+        self.model.rowsInserted.connect(self.proxy_model.invalidate)
+        self.model.rowsMoved.connect(self.proxy_model.invalidate)
+        self.model.rowsRemoved.connect(self.proxy_model.invalidate)
+        self.model.modelReset.connect(self.proxy_model.invalidate)
         
         self.table.setModel(self.proxy_model)
         
@@ -388,8 +442,14 @@ class AnnotationsTable(QWidget):
         """Toggle visibility for all annotations in the current capture."""
         # Note: This code is somewhat duplicative of the annotation toggling
         # code in the menu and could be consolidated in the future.
-        annotations_dict = self.model._get_current_capture_annotations()
-        if annotations_dict is None or len(annotations_dict) == 0:
+
+        app_state = self._get_app_state()
+        annotations_dict : dict[str, LoadedAnnotationDict ]= {}
+        for annotation_id in self.model._annotation_id_list:
+            if annotation := app_state._loaded_files._annotation_id_to_annotations.get(annotation_id):
+                annotations_dict[annotation_id] = annotation
+
+        if not annotations_dict:
             return
         
         # Determine if we should show all or hide all
@@ -414,27 +474,23 @@ class AnnotationsTable(QWidget):
         
         menu = QMenu(self)
         view_json_action = menu.addAction("View/Edit Annotation JSON")
+        delete_action = menu.addAction("Delete Annotation")
         
         action = menu.exec_(self.table.viewport().mapToGlobal(position))
         
         if action == view_json_action:
             self._view_edit_annotation_json(source_index.row())
+        elif action == delete_action:
+            self._delete_annotation(source_index.row())
     
     def _view_edit_annotation_json(self, row):
         """Open a dialog to view and edit the annotation's raw JSON."""
-        annotations_dict: dict[str, LoadedDictAction] = self.model._get_current_capture_annotations()
-        if annotations_dict is None:
+
+
+        _, annotation = self.model._get_annotation_id_and_dict_for_row_idx(row)
+        if annotation is None:
             return
-        
-        # FIXME: this seesms to assume that the order of the annotations dict is
-        # the same as the order of our rows, which may not always be true
-        keys = list(annotations_dict.keys())
-        if row < 0 or row >= len(keys):
-            return
-        
-        annotation_id = keys[row]
-        annotation = annotations_dict[annotation_id]
-        
+
         # Convert annotation to dict for editing
         annotation_data = dict(annotation)
         
@@ -458,6 +514,24 @@ class AnnotationsTable(QWidget):
                     annotation.update(edited_data)
                 except Exception as e:
                     log.error(f"Error updating annotation from JSON: {e}")
+    
+    def _delete_annotation(self, row):
+        """Delete the annotation at the specified row."""
+        annotation_id, annotation = self.model._get_annotation_id_and_dict_for_row_idx(row)
+        if annotation is not None:
+            #self.proxy_model.layoutAboutToBeChanged.emit()
+            #self.model.rowsAboutToBeRemoved.emit(QModelIndex(), row, row)
+
+            #self.model.beginRemoveRows(QModelIndex(), row, row)
+            annotation.delete_annotation()
+            #self.model.removeRow(row)
+            #self.model.endRemoveRows()
+
+            #self.model.layoutChanged.emit()
+            #self.model.rowsRemoved.emit(QModelIndex(), row, row)
+            #self.proxy_model.layoutChanged.emit()
+        else:
+            log.warning(f'Attempted to delete non-existent annotation ID {annotation_id}')
 
     def get_application(self):
         return self.parent().application
