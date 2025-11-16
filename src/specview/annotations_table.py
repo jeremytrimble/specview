@@ -309,6 +309,11 @@ class AnnotationsModel(QAbstractTableModel):
 
 class AnnotationsSortFilterProxyModel(QSortFilterProxyModel):
     """Custom proxy model that prevents sorting on the Visible column."""
+
+    def parent(self, item: QModelIndex):
+        # return an empty QModelIndex since we have no parent model item
+        # Note: without this, the app crashes when deleting annotations
+        return QModelIndex()
     
     def lessThan(self, left, right):
         """Override to prevent sorting on column 0 (Visible)."""
