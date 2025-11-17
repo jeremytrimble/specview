@@ -79,10 +79,10 @@ def test_model_user_role_returns_comparable_values(qapp, tmpdir):
     app_state = qapp.app_state
     app_state._loaded_files = lfc
     capture_id = list(lf._capture_id_to_capture.keys())[0]
-    app_state.selected_capture_changed.emit(capture_id)
     
+    # Create model before emitting signal so it can receive the signal
     model = AnnotationsModel()
-    model._current_capture_id = capture_id
+    app_state.selected_capture_changed.emit(capture_id)
     
     # Test that UserRole returns numeric values for time columns
     index_start_time = model.createIndex(0, 2)  # Start Time column
@@ -121,10 +121,10 @@ def test_model_display_role_unchanged(qapp, tmpdir):
     app_state = qapp.app_state
     app_state._loaded_files = lfc
     capture_id = list(lf._capture_id_to_capture.keys())[0]
-    app_state.selected_capture_changed.emit(capture_id)
     
+    # Create model before emitting signal so it can receive the signal
     model = AnnotationsModel()
-    model._current_capture_id = capture_id
+    app_state.selected_capture_changed.emit(capture_id)
     
     # Test that DisplayRole returns formatted strings
     index_start_time = model.createIndex(0, 2)  # Start Time column
