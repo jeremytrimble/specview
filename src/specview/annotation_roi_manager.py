@@ -190,7 +190,7 @@ class AnnotationROIManager(Generic[ROIType]):
 
         # TODO: set colors appropriately
         #aroi.roi.setPen(self._roiPen)
-        aroi.roi.setVisible(True)
+        aroi.roi.setVisible(ad.visible)
         aroi.roi.setLabel(ad.label)
 
     def on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):

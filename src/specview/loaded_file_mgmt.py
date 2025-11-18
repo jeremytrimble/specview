@@ -19,6 +19,8 @@ from .chunkwise_compute import (
     FrequencyDomainComputationSpec, DEFAULT_FREQ_COMPUTATION_SPEC
 )
 
+import logging
+log = logging.getLogger("loaded_file_mgmt")
 
 import random
 rnd = random.Random(42)
@@ -153,6 +155,7 @@ class LoadedAnnotationDict(dict):
         rv._annotation_id = annotation_id
         rv._deactivated = False
         rv._is_updating = False  # Instance-level flag to prevent recursive updates
+        rv._visible = True  # Annotations are visible by default
         return rv
 
     @property
@@ -233,6 +236,33 @@ class LoadedAnnotationDict(dict):
     def annotation_id(self) -> AnnotationID:
         return self._annotation_id
 
+    @property
+    def visible(self) -> bool:
+        """
+        Get the visibility state of this annotation.
+        
+        Returns:
+            True if the annotation should be visible in the UI, False otherwise
+        """
+        return self._visible
+    
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        """
+        Set the visibility state of this annotation.
+        
+        Args:
+            value: True to make the annotation visible, False to hide it
+        """
+        if self._visible != value:
+            self._visible = value
+            # Notify parent that the annotation has been modified
+            # This will trigger UI updates without changing the underlying dictionary
+            # Note: this could be emitted as a different type of signal in the
+            # future if we want to separate content changes from visibility
+            # changes
+            self._notify_parent_that_i_was_modified()
+
     def get_frequency_range_Hz(self) -> tuple[float,float]|None:
         f_lo = self.get(sigmf.SigMFFile.FLO_KEY)
         f_hi = self.get(sigmf.SigMFFile.FHI_KEY)
@@ -243,8 +273,9 @@ class LoadedAnnotationDict(dict):
     
     def get_time_range_relative_to_capture(self, capture_id:CaptureID) -> tuple[float,float]|None:
         parent: LoadedFile = self._parent_loadedfile
-        capture = parent._capture_id_to_capture[capture_id]
-        return get_annotation_time_bound_relative_to_current_capture(self, capture.capture_idx_in_file, parent.sigmf_file)
+        if capture := parent._capture_id_to_capture.get(capture_id):
+            return get_annotation_time_bound_relative_to_current_capture(self, capture.capture_idx_in_file, parent.sigmf_file)
+        return None
 
     def get_time_axis_for_capture(self, capture_id:CaptureID) -> MonotonicAxis:
         """Returns a MonotonicAxis that maps sample indexes to floating-point time in seconds 
@@ -580,8 +611,21 @@ class LoadedFile:
             self._has_unsaved_changes = True
         
         if action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
-            self._annotation_id_to_annotation.pop(annotation_id, None) # remove from our own mapping
+            log.debug(f"Removing annotation ID {annotation_id} from LoadedFile {self.file_id} due to action {action}")
             self._parent_loaded_files._annotation_id_to_annotations.pop(annotation_id, None) # remove from the global mapping
+            annotation = self._annotation_id_to_annotation.pop(annotation_id, None) # remove from our own mapping
+            if annotation is not None:
+                self._remove_annotation_from_sigmf_file(annotation)
+
+    def _remove_annotation_from_sigmf_file(self, annotation: LoadedAnnotationDict) -> None:
+        annotations_list : list[dict] = self._sigmf_file.get_annotations()
+        idx = annotations_list.index(annotation._underlying_dict)
+        if idx >= 0:
+            log.debug(f"Removing annotation at index {idx} from SigMFFile for LoadedFile {self.file_id}")
+            # deletes from the list held by the SigMFFile in-place, there is no
+            # need to re-set the annotations list
+            del annotations_list[idx]   
+
 
     def _get_next_capture_id(self) -> CaptureID:
         """

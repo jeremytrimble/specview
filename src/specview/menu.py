@@ -84,6 +84,87 @@ def create_annotation_from_selection() -> None:
     except Exception as e:
         log.error(f"Failed to create annotation: {e}")
 
+def _get_annotations_dict():
+    """
+    Get the annotations dictionary for the current capture.
+    Returns None if no capture is selected or capture not found.
+    """
+    app_state: AppState = QApplication.instance().app_state  # type: ignore[union-attr]
+    
+    # Get the selected capture
+    selected_capture_id = app_state._selected_capture
+    if selected_capture_id is None:
+        log.warning("No capture selected.")
+        return None
+    
+    # Get the capture dictionary
+    capture = app_state.get_capture_by_id(selected_capture_id)
+    if capture is None:
+        log.warning(f"Capture {selected_capture_id} not found.")
+        return None
+    
+    # Get all annotations for this capture's parent file
+    return capture.parent_loadedfile.get_annotations_dict()
+
+def set_all_annotations_visible(visible: bool) -> None:
+    """
+    Set visibility for all annotations in the current capture.
+    
+    Args:
+        visible: True to show all annotations, False to hide all annotations
+    """
+    annotations_dict = _get_annotations_dict()
+    if annotations_dict is None:
+        return
+    
+    # Set visibility for all annotations
+    count = 0
+    for annotation in annotations_dict.values():
+        if annotation.visible != visible:
+            annotation.visible = visible
+            count += 1
+    
+    if count > 0:
+        action = "Showed" if visible else "Hid"
+        log.info(f"{action} {count} annotation(s)")
+    else:
+        status = "visible" if visible else "hidden"
+        log.info(f"All annotations are already {status}")
+
+def show_all_annotations() -> None:
+    """
+    Show all annotations in the current capture.
+    """
+    set_all_annotations_visible(True)
+
+def hide_all_annotations() -> None:
+    """
+    Hide all annotations in the current capture.
+    """
+    set_all_annotations_visible(False)
+
+def toggle_all_annotations() -> None:
+    """
+    Toggle visibility for all annotations in the current capture.
+    If any annotation is hidden, show all. Otherwise, hide all.
+    """
+    annotations_dict = _get_annotations_dict()
+    if annotations_dict is None:
+        return
+    
+    if len(annotations_dict) == 0:
+        log.info("No annotations to toggle")
+        return
+    
+    # Determine if we should show all or hide all
+    # If any annotation is hidden, show all. Otherwise, hide all.
+    any_hidden = any(not ann.visible for ann in annotations_dict.values())
+    
+    if any_hidden:
+        show_all_annotations()
+    else:
+        hide_all_annotations()
+
 def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     """
     Example Populate the menubar with the necessary menus and actions.
@@ -159,8 +240,24 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     annotation_from_selection.setShortcut("Ctrl+T")
     annotation_from_selection.triggered.connect(lambda: create_annotation_from_selection())
 
+    show_all_action = QAction(text="Show All Annotations", parent=parent)
+    #show_all_action.setShortcut("Ctrl+E")
+    show_all_action.triggered.connect(show_all_annotations)
+    
+    hide_all_action = QAction(text="Hide All Annotations", parent=parent)
+    #hide_all_action.setShortcut("Ctrl+Shift+E")
+    hide_all_action.triggered.connect(hide_all_annotations)
+    
+    toggle_all_action = QAction(text="Toggle All Annotations", parent=parent)
+    toggle_all_action.setShortcut("Ctrl+R")
+    toggle_all_action.triggered.connect(toggle_all_annotations)
+
     annotations_menu = QMenu("&Annotations", menu_bar)
     annotations_menu.addAction(annotation_from_selection)
+    annotations_menu.addSeparator()
+    annotations_menu.addAction(show_all_action)
+    annotations_menu.addAction(hide_all_action)
+    annotations_menu.addAction(toggle_all_action)
     
     # View menu for toggling plot visibility
     view_menu = QMenu("&View", menu_bar)
