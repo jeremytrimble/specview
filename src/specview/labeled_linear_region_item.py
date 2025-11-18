@@ -27,14 +27,12 @@ class LabeledLinearRegionItem(pg.LinearRegionItem):
         self.text_item.setText(text)
         #self._update_label_position()
 
-    # TODO: remove this, right?
-    #def _update_label_position(self):
-    #    return
-    #    """Update the label position to be centered at the top of the region."""
-    #    region = self.getRegion()
-    #    center = (region[0] + region[1]) / 2
-    #    # Position the label at the center of the region
-    #    self.text_item.setPos(center, 0)
+    def setColors(self, text_color, fill_color):
+        """Set the label text color and fill color."""
+        self.label_color = text_color
+        self.text_item.setColor(text_color)
+        self.text_item.fill = pg.mkBrush(fill_color)
+        self.text_item.update() # trigger a redraw
 
     def setLabelVisible(self, visible: bool):
         """Show or hide the label."""

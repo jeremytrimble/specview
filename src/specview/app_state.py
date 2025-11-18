@@ -77,6 +77,7 @@ class AppState(QObject):
     loaded_files_changed = pyqtSignal([FileID, LoadedFileAction], name='loaded_files_changed') # emitted when a file is opened or closed
     selected_capture_changed = pyqtSignal([CaptureID], name='selected_capture_changed') # emitted with (CaptureID) when a capture is selected
     selected_channel_changed = pyqtSignal(int, name='selected_channel_changed') # emitted with channel_index when a channel is selected
+    selected_annotation_changed = pyqtSignal([object], name='selected_annotation_changed') # emitted with (AnnotationID) or None when an annotation is selected 
 
     annotation_changed = pyqtSignal([AnnotationID,LoadedDictAction], name='annotation_changed')
     recent_files_changed = pyqtSignal([], name='recent_files_changed')
@@ -113,6 +114,7 @@ class AppState(QObject):
         self._frequency_interval: tuple[float,float]|None = None
 
         self._selected_capture: CaptureID|None = None
+        self._selected_annotation: AnnotationID|None = None
 
         self._cursor_frequency_gate = SignalGate()
         self._cursor_time_gate = SignalGate()
@@ -122,7 +124,6 @@ class AppState(QObject):
         self._loaded_files = LoadedFilesCollection()
         self._loaded_files.set_file_load_or_unload_callback(self._on_file_load_or_unload)
         self._loaded_files.set_annotation_changed_callback(self._on_annotation_changed)
-
 
     def _on_file_load_or_unload(self, fileid:FileID, action:LoadedFileAction):
         self.loaded_files_changed.emit(fileid, action)
@@ -182,6 +183,18 @@ class AppState(QObject):
 
         self.selected_capture_changed.emit( self._selected_capture )
         self.selected_channel_changed.emit(0)  # default to channel 0  TODO: do something with channels
+
+    def set_selected_annotation(self, annotation_id: AnnotationID|None):
+        old_annotation_id = self._selected_annotation
+        self._selected_annotation = annotation_id
+
+        log.debug(f"AppState: set_selected_annotation: {self._selected_annotation} (was {old_annotation_id})")
+
+        if self._selected_annotation == old_annotation_id:
+            return
+
+        self.selected_annotation_changed.emit( self._selected_annotation )
+
 
     def get_recent_files(self) -> list[str]:
         """Get the list of recent files."""
