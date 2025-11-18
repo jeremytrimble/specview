@@ -30,3 +30,10 @@ class LabeledRectROI(pg.RectROI):
 
     def setLabelVisible(self, visible:bool):
         self.text_item.setVisible(visible)
+
+    def setColors(self, text_color, fill_color):
+        """Set the label text color and fill color."""
+        self.label_color = text_color
+        self.text_item.setColor(text_color)
+        self.text_item.fill = pg.mkBrush(fill_color)
+        self.text_item.update() # trigger a redraw

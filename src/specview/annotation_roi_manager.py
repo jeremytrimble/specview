@@ -9,7 +9,7 @@ from .labeled_rect_roi import LabeledRectROI
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
 from .app_state import AppState
-from .ui_constants import ANNOTATION_ROI_COLOR
+from .ui_constants import ANNOTATION_ROI_COLOR, SELECTED_ANNOTATION_ROI_COLOR
 import enum
 
 log = logging.getLogger(__name__)
@@ -54,8 +54,11 @@ class AnnotationROIManager(Generic[ROIType]):
             raise ValueError(f"Unsupported ROI dimension type: {self._roi_dimensions}")
 
         self._annotation_rois: Dict[str, AnnotationROI[ROIType]] = {}
-        self._current_capture_id: CaptureID = None
-        self._roiPen = pg.mkPen(ANNOTATION_ROI_COLOR, width=3)
+        self._current_capture_id: CaptureID|None = None
+        self._selected_annotation: AnnotationID|None = None
+
+        app_state = self._get_app_state()
+        app_state.selected_annotation_changed.connect(self._on_selected_annotation_changed)
         
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
@@ -120,6 +123,21 @@ class AnnotationROIManager(Generic[ROIType]):
                 end_sample = time_axis.idx_nearest_to_value(float(region[1]))
                 annotation_dict[sigmf.SigMFFile.START_INDEX_KEY] = start_sample
                 annotation_dict[sigmf.SigMFFile.LENGTH_INDEX_KEY] = end_sample - start_sample
+
+    def _on_selected_annotation_changed(self, annotation_id: AnnotationID|None):
+        """Handle changes to the selected annotation."""
+        previously_selected = self._selected_annotation
+        self._selected_annotation = annotation_id
+
+        log.debug(f"AnnotationROIManager: selected annotation changed from {previously_selected} to {annotation_id}")
+
+        if previously_selected is not None and previously_selected in self._annotation_rois:
+            aroi = self._annotation_rois[previously_selected]
+            aroi.roi.setColors( text_color=(255, 255, 255), fill_color=ANNOTATION_ROI_COLOR )
+
+        if annotation_id is not None and annotation_id in self._annotation_rois:
+            aroi = self._annotation_rois[annotation_id]
+            aroi.roi.setColors( text_color=(255, 255, 255), fill_color=SELECTED_ANNOTATION_ROI_COLOR)
 
     def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id: AnnotationID):
         """Create or update an annotation ROI based on the annotation ID."""
@@ -188,8 +206,6 @@ class AnnotationROIManager(Generic[ROIType]):
                 aroi = self._annotation_rois[ad.annotation_id]
                 aroi.roi.setRegion(region)
 
-        # TODO: set colors appropriately
-        #aroi.roi.setPen(self._roiPen)
         aroi.roi.setVisible(ad.visible)
         aroi.roi.setLabel(ad.label)
 
