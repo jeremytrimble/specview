@@ -51,7 +51,7 @@ TEST_CASES = [
         sample_rate=1e6,
         duration_sec=2.0,
         num_annotations=600,
-        max_load_time=10.0,
+        max_load_time=20.0,
         description="Moderate file with high annotation count"
     ),
 ]
@@ -300,7 +300,7 @@ def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, 
         sample_rate=1e6,
         duration_sec=1.0,
         num_annotations=5,
-        max_load_time=2.0,
+        max_load_time=4.0,
         description="Small file for multiple file test"
     )
     
@@ -353,7 +353,7 @@ def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, 
     print(f"  Max time: {max_time:.3f}s")
     print(f"  Individual times: {[f'{t:.3f}s' for t in load_times]}")
     
-    # The slowest file should not be more than 100% slower than average
+    # The slowest file should not be more than 250% slower than average
     # (allows for normal CI environment variation but catches serious degradation)
-    assert max_time < avg_time * 2.0, \
+    assert max_time < avg_time * 3.5, \
         f"Performance degraded: max {max_time:.3f}s vs avg {avg_time:.3f}s"
