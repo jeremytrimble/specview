@@ -67,12 +67,6 @@ class AnnotationsModel(QAbstractTableModel):
             parent_file = capture.parent_loadedfile
             new_annotations_dict = parent_file.get_annotations_dict()
 
-            # layoutChanged indicates that the SHAPE of the model has changed,
-            # dataChanged is for when just some elements of the data have changed
-            # but the shape remains the same
-            #self.layoutAboutToBeChanged.emit()
-            #self.layoutChanged.emit() 
-
             self.modelAboutToBeReset.emit()
             self._annotation_id_list = list(new_annotations_dict.keys())
             self.resetInternalData()
@@ -87,7 +81,6 @@ class AnnotationsModel(QAbstractTableModel):
             bottom_right = self.createIndex(self.rowCount(None) - 1, self.columnCount(None) - 1)
             self.dataChanged.emit(top_left, bottom_right)
         elif action in (LoadedDictAction.LOADED, LoadedDictAction.ADDED, LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
-            #self.layoutAboutToBeChanged.emit()
             if action == LoadedDictAction.DELETED:
 
                 try:
@@ -98,7 +91,6 @@ class AnnotationsModel(QAbstractTableModel):
 
                 log.debug(f"Annotation deleted: {annotation_id}")
                 self.beginRemoveRows(QModelIndex(), row_idx_to_remove, row_idx_to_remove)
-                self.removeRow(row_idx_to_remove)
                 self._annotation_id_list.pop(row_idx_to_remove)
                 self.endRemoveRows()
                 log.debug(f"did the removerows dance for {annotation_id}")
@@ -112,7 +104,7 @@ class AnnotationsModel(QAbstractTableModel):
                 current_capture = app_state._loaded_files.get_capture_from_id(self._current_capture_id)
                 parent_loadedfile = current_capture.parent_loadedfile
                 if annotation_id not in parent_loadedfile.get_annotations_dict():
-                    log.debug(f"Skipping annotation {annotation_id=}, because it is not part of the current capture")
+                    log.debug(f"Skipping annotation {annotation_id=}, because it is not part of the current file")
                 else:
                     log.debug(f"Annotation added: {annotation_id}")
                     self.beginInsertRows(QModelIndex(), len(self._annotation_id_list), len(self._annotation_id_list))
@@ -120,10 +112,6 @@ class AnnotationsModel(QAbstractTableModel):
                     self.endInsertRows()
                     log.debug(f"did the insertrows dance for {annotation_id}")
 
-            #self.layoutChanged.emit()
-
-            #self.modelAboutToBeReset.emit()
-            #self.modelReset.emit()
 
     def rowCount(self, index):
         # TODO: what is index for?
@@ -379,17 +367,6 @@ class AnnotationsTable(QWidget):
         self.proxy_model.setSortRole(Qt.UserRole)
         self.proxy_model.setDynamicSortFilter(True)
 
-        #self.model.layoutAboutToBeChanged.connect(self.proxy_model.layoutAboutToBeChanged)
-        #self.model.layoutChanged.connect(self.proxy_model.layoutChanged)
-        #self.model.rowsAboutToBeRemoved.connect(self.proxy_model.rowsAboutToBeRemoved)
-        #self.model.rowsRemoved.connect(self.proxy_model.rowsRemoved)
-
-        self.model.layoutChanged.connect(self.proxy_model.invalidate)
-        self.model.rowsInserted.connect(self.proxy_model.invalidate)
-        self.model.rowsMoved.connect(self.proxy_model.invalidate)
-        self.model.rowsRemoved.connect(self.proxy_model.invalidate)
-        self.model.modelReset.connect(self.proxy_model.invalidate)
-        
         self.table.setModel(self.proxy_model)
         
         # Enable sorting on the table view
@@ -519,17 +496,7 @@ class AnnotationsTable(QWidget):
         """Delete the annotation at the specified row."""
         annotation_id, annotation = self.model._get_annotation_id_and_dict_for_row_idx(row)
         if annotation is not None:
-            #self.proxy_model.layoutAboutToBeChanged.emit()
-            #self.model.rowsAboutToBeRemoved.emit(QModelIndex(), row, row)
-
-            #self.model.beginRemoveRows(QModelIndex(), row, row)
             annotation.delete_annotation()
-            #self.model.removeRow(row)
-            #self.model.endRemoveRows()
-
-            #self.model.layoutChanged.emit()
-            #self.model.rowsRemoved.emit(QModelIndex(), row, row)
-            #self.proxy_model.layoutChanged.emit()
         else:
             log.warning(f'Attempted to delete non-existent annotation ID {annotation_id}')
 
