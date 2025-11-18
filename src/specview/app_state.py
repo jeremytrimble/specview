@@ -77,7 +77,7 @@ class AppState(QObject):
     loaded_files_changed = pyqtSignal([FileID, LoadedFileAction], name='loaded_files_changed') # emitted when a file is opened or closed
     selected_capture_changed = pyqtSignal([CaptureID], name='selected_capture_changed') # emitted with (CaptureID) when a capture is selected
     selected_channel_changed = pyqtSignal(int, name='selected_channel_changed') # emitted with channel_index when a channel is selected
-    selected_annotation_changed = pyqtSignal([object], name='selected_annotation_changed') # emitted with (AnnotationID) or None when an annotation is selected 
+    selected_annotation_changed = pyqtSignal([object], name='selected_annotation_changed') # emitted with (AnnotationID) or None when an annotation is selected
 
     annotation_changed = pyqtSignal([AnnotationID,LoadedDictAction], name='annotation_changed')
     recent_files_changed = pyqtSignal([], name='recent_files_changed')

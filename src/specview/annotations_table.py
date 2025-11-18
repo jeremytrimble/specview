@@ -391,7 +391,6 @@ class AnnotationsTable(QWidget):
         self.model.layoutChanged.connect(self.table.resizeColumnsToContents)
 
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
-        self._selected_annotation = None
 
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
@@ -401,7 +400,6 @@ class AnnotationsTable(QWidget):
         app_state = self._get_app_state()
         indexes = self.table.selectionModel().selectedIndexes()
         if not indexes:
-            self._selected_annotation = None
             app_state.set_selected_annotation(None)
             return
         
