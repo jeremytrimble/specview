@@ -344,14 +344,15 @@ def get_open_dir_dialog_initial_dir() -> str:
 def present_open_file_dialog(parent):
     """
     Present an open file dialog to the user.
+    Supports selecting multiple files at once.
     """
     options = QFileDialog.Options()
     options |= QFileDialog.ReadOnly
-    file_name, _ = QFileDialog.getOpenFileName(parent, "Open SigMF File", get_open_dir_dialog_initial_dir(), "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
-    if file_name:
-        log.info(f"Selected file: {file_name}")
+    file_names, _ = QFileDialog.getOpenFileNames(parent, "Open SigMF File(s)", get_open_dir_dialog_initial_dir(), "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
+    if file_names:
+        log.info(f"Selected files: {file_names}")
         app_state: AppState = QApplication.instance().app_state
-        app_state.load_sigmf_file(file_name)
-
+        for file_name in file_names:
+            app_state.load_sigmf_file(file_name)
     else:
         return None

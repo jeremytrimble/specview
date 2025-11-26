@@ -85,7 +85,7 @@ class AppState(QObject):
     # Maximum number of recent files to track
     MAX_RECENT_FILES = 10
 
-    def __init__(self, parent = ...):
+    def __init__(self, parent):
         super().__init__(parent)
 
         # Items of state:
@@ -229,18 +229,25 @@ class AppState(QObject):
         settings.setValue("recentFiles", self._recent_files)
         self.recent_files_changed.emit()
 
-    def load_sigmf_file(self, file_path: Path) -> LoadedFile:
+    def load_sigmf_file(self, file_path: Path) -> LoadedFile | None:
         """
         Load a SigMF file and return the LoadedFile object.
+        Returns None if the file is already loaded.
         """
-        file_path = Path(file_path)
+        file_path = Path(file_path).resolve()
+
+        # Check if file is already loaded
+        for loaded_file in self._loaded_files.loaded_file_dict.values():
+            if loaded_file.file_path.resolve() == file_path:
+                log.info(f"File already loaded: {file_path}")
+                return None
 
         is_first_load = len(self._loaded_files.loaded_file_dict) == 0
 
         loaded_file = self._loaded_files.load_file(file_path)
 
-        if is_first_load:
-            self.set_selected_capture( first_from_dict(loaded_file._capture_id_to_capture).capture_id )
+        # Select the first capture of the newly loaded file
+        self.set_selected_capture( first_from_dict(loaded_file._capture_id_to_capture).capture_id )
 
         # Add to recent files
         self.add_recent_file(file_path)
