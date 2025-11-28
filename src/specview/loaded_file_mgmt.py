@@ -33,6 +33,8 @@ FileID = str
 CaptureID = str
 AnnotationID = str
 
+class MalformedSigMFFile(ValueError):
+    pass
 
 class LoadedThingCounter:
     def __init__(self, prefix:str):
@@ -563,9 +565,12 @@ class LoadedFile:
             raise FileNotFoundError(f"SigMF meta file not found: {self._sigmf_meta_file_path}")
 
         # TODO: checksum computation is skipped to improve load time -- verify checksum in background?
-        self._sigmf_file = sigmf.sigmffile.fromfile(self._sigmf_data_file_path, skip_checksum=True)
-        assert isinstance(self._sigmf_file, sigmf.SigMFFile), "Loaded SigMF file is not a SigMFFile instance"
+        returned_file = sigmf.sigmffile.fromfile(self._sigmf_data_file_path, skip_checksum=True)
+        assert isinstance(returned_file, sigmf.SigMFFile), "Loaded SigMF file is not a SigMFFile instance"
+        self._sigmf_file = returned_file
         self._has_unsaved_changes = False
+
+        self._enforce_sigmf_metadata_invariants()
 
         # "CCAs": Chunkwise Computed Arrays
         self._time_ccas: dict[TimeDomainComputationSpec, TimeDomainChunkwiseComputedArray] = {}
@@ -593,6 +598,17 @@ class LoadedFile:
 
         for annotation_id in self._annotation_id_to_annotation:
             self._on_child_annotation_changed(annotation_id, LoadedDictAction.LOADED)
+
+    def _enforce_sigmf_metadata_invariants(self):
+        smf: sigmf.sigmffile.SigMFFile = self._sigmf_file
+
+        #if smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY) is None:
+        #    raise MalformedSigMFFile("SigMF file is missing required global field: sample_rate")
+
+        for capture_idx, capture in enumerate(smf.get_captures()):
+            if sigmf.SigMFFile.FREQUENCY_KEY not in capture:
+                log.warning(f"Capture index {capture_idx} is missing required field: frequency. Setting to 0 Hz.")
+                capture[sigmf.SigMFFile.FREQUENCY_KEY] = 0.0  # default to 0 Hz if missing
 
     @property
     def sigmf_file(self) -> sigmf.SigMFFile:
