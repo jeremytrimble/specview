@@ -128,7 +128,7 @@ class CapturesPanel(QWidget):
         loaded_file = app_state._loaded_files.get_capture_from_id(capture_id).parent_loadedfile
 
         sigmf_meta = loaded_file.sigmf_file.get_global_info()
-        self.file_path_value.setText(str(loaded_file.file_path))
+        self.file_path_value.setText(str(loaded_file.sigmf_data_file_path))
         self.sample_rate_value.setText(freq_format(loaded_file.sample_rate_Hz))
         self.duration_value.setText(duration_format(loaded_file.sigmf_file.sample_count / loaded_file.sample_rate_Hz))
         self.num_channels_value.setText(str(loaded_file.num_channels))
@@ -153,7 +153,7 @@ class CapturesPanel(QWidget):
             parent=self,
             json_data=global_metadata,
             read_only=True,
-            title=f"Global SigMF Metadata - {loaded_file.file_path.name}"
+            title=f"Global SigMF Metadata - {loaded_file.sigmf_data_file_path.name}"
         )
         dialog.exec_()
 
@@ -190,7 +190,7 @@ class CapturesPanel(QWidget):
             parent=self,
             json_data=capture_data,
             read_only=True,
-            title=f"Capture Metadata - {capture.parent_loadedfile.file_path.name} - Capture {capture.capture_idx_in_file:02d}"
+            title=f"Capture Metadata - {capture.parent_loadedfile.sigmf_data_file_path.name} - Capture {capture.capture_idx_in_file:02d}"
         )
         dialog.exec_()
 
@@ -205,7 +205,7 @@ class CapturesPanel(QWidget):
         for loaded_file in app_state._loaded_files.loaded_file_dict.values():
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
-            file_item = QTreeWidgetItem([loaded_file.file_path.name])
+            file_item = QTreeWidgetItem([loaded_file.sigmf_data_file_path.name])
 
             for capture in loaded_file._capture_id_to_capture.values():
                 #log.debug(f" populating for {capture}")

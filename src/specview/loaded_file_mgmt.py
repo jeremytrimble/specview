@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import typing
 from pathlib import Path
 import enum
@@ -25,11 +26,8 @@ log = logging.getLogger("loaded_file_mgmt")
 import random
 rnd = random.Random(42)
 
-# These ids are unique within one run of the application, for internal use only
-#FileID = typing.NewType("FileID", str)
-#CaptureID = typing.NewType("CaptureID", str)
-#AnnotationID = typing.NewType("AnnotationID", str)
 
+# These ids are unique within one run of the application, for internal use only
 # Type aliases:
 FileID = str
 CaptureID = str
@@ -103,7 +101,16 @@ class LoadedFilesCollection:
     def set_annotation_changed_callback(self, cb: typing.Callable[[AnnotationID, LoadedDictAction], None]) -> None:
         self._annotation_changed_cb = cb
 
-    def load_file(self, file_path: Path) -> LoadedFile:
+    def load_file(self, file_path: Path) -> LoadedFile | None:
+
+        sigmf_files = resolve_sigmf_filename(file_path)
+
+        # Check if file is already loaded
+        for loaded_file in self.loaded_file_dict.values():
+            if loaded_file.sigmf_data_file_path == sigmf_files.data_filename:
+                log.info(f"File already loaded: {file_path}")
+                return None
+
         loaded_file = LoadedFile(file_path=file_path, parent_loaded_files=self)
         self._fileid_to_loadedfile[loaded_file._file_id] = loaded_file
         if self._file_load_or_unload_cb is not None:
@@ -522,6 +529,16 @@ class LoadedAnnotationDict(dict):
         self[sigmf.SigMFFile.FLO_KEY] = current_center - half_bw
         self[sigmf.SigMFFile.FHI_KEY] = current_center + half_bw
 
+@dataclass
+class SigMFFilenames:
+    meta_filename: Path
+    data_filename: Path
+
+def resolve_sigmf_filename(file_path: Path) -> SigMFFilenames:
+    sigmf_files_dict = sigmf.sigmffile.get_sigmf_filenames(file_path)
+    data_file_path: Path = Path(sigmf_files_dict['data_fn']).resolve()
+    meta_file_path: Path = Path(sigmf_files_dict['meta_fn']).resolve()
+    return SigMFFilenames(meta_filename=meta_file_path, data_filename=data_file_path)
 
 class LoadedFile:
     """
@@ -535,15 +552,26 @@ class LoadedFile:
         # sigmf_file is the SigMFFile object loaded from that file
         self._parent_loaded_files = parent_loaded_files
 
+        # TODO: change this if we decide to support collections or archives
+        sigmf_files = resolve_sigmf_filename(file_path)
+        self._sigmf_data_file_path: Path = sigmf_files.data_filename
+        self._sigmf_meta_file_path: Path = sigmf_files.meta_filename
+
+        if not self._sigmf_data_file_path.exists():
+            raise FileNotFoundError(f"SigMF data file not found: {self._sigmf_data_file_path}")
+        if not self._sigmf_meta_file_path.exists():
+            raise FileNotFoundError(f"SigMF meta file not found: {self._sigmf_meta_file_path}")
+
         # TODO: checksum computation is skipped to improve load time -- verify checksum in background?
-        self._sigmf_file: sigmf.SigMFFile = sigmf.sigmffile.fromfile(file_path, skip_checksum=True)
+        self._sigmf_file = sigmf.sigmffile.fromfile(self._sigmf_data_file_path, skip_checksum=True)
+        assert isinstance(self._sigmf_file, sigmf.SigMFFile), "Loaded SigMF file is not a SigMFFile instance"
         self._has_unsaved_changes = False
 
         # "CCAs": Chunkwise Computed Arrays
         self._time_ccas: dict[TimeDomainComputationSpec, TimeDomainChunkwiseComputedArray] = {}
         self._freq_ccas: dict[FrequencyDomainComputationSpec, FrequencyDomainChunkwiseComputedArray] = {}
 
-        self._file_path: Path = Path(self._sigmf_file.data_file)  # This is the path to the .sigmf-data file
+        # This is the path to the .sigmf-data file
         self._file_id: FileID = loaded_file_counter.get_next_id()
 
         self._capture_idx_to_capture: dict[int, LoadedCaptureDict] = {}
@@ -588,14 +616,18 @@ class LoadedFile:
         return self._has_unsaved_changes
 
     def save(self):
-        self._sigmf_file.tofile(self._file_path.with_suffix(".sigmf-meta"))
+        self._sigmf_file.tofile(self.sigmf_meta_file_path)
         self._has_unsaved_changes = False
 
     # TODO: support save-as?
 
     @property
-    def file_path(self) -> Path:
-        return self._file_path
+    def sigmf_meta_file_path(self) -> Path:
+        return self._sigmf_meta_file_path
+
+    @property
+    def sigmf_data_file_path(self) -> Path:
+        return self._sigmf_data_file_path
 
     @property
     def file_id(self) -> FileID:
@@ -702,7 +734,7 @@ class LoadedFile:
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = TimeDomainChunkwiseComputedArray(
-                signal_file = self.sigmf_file.data_file,
+                signal_file = self.sigmf_data_file_path,
                 signal_file_datatype = sample_dtype,
                 comp_spec= comp_spec,
                 num_channels=num_channels,
@@ -725,7 +757,7 @@ class LoadedFile:
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = FrequencyDomainChunkwiseComputedArray(
-                signal_file= self.sigmf_file.data_file,
+                signal_file= self.sigmf_data_file_path,
                 signal_file_datatype= sample_dtype,
                 comp_spec= comp_spec,
                 num_input_channels= num_channels,

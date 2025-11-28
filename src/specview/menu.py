@@ -329,7 +329,7 @@ def get_open_dir_dialog_initial_dir() -> str:
     app_state: AppState = QApplication.instance().app_state
     capture = app_state._loaded_files.get_capture_from_id( app_state._selected_capture )
     if capture is not None:
-        file_path = capture.parent_loadedfile.file_path
+        file_path = capture.parent_loadedfile.sigmf_data_file_path
         if file_path is not None and file_path.parent.exists():
             return str(file_path.parent)
 

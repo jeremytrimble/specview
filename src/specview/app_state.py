@@ -234,17 +234,11 @@ class AppState(QObject):
         Load a SigMF file and return the LoadedFile object.
         Returns None if the file is already loaded.
         """
-        file_path = Path(file_path).resolve()
-
-        # Check if file is already loaded
-        for loaded_file in self._loaded_files.loaded_file_dict.values():
-            if loaded_file.file_path.resolve() == file_path:
-                log.info(f"File already loaded: {file_path}")
-                return None
-
         is_first_load = len(self._loaded_files.loaded_file_dict) == 0
 
         loaded_file = self._loaded_files.load_file(file_path)
+        if loaded_file is None:
+            return None
 
         # Select the first capture of the newly loaded file
         self.set_selected_capture( first_from_dict(loaded_file._capture_id_to_capture).capture_id )
@@ -261,7 +255,7 @@ class AppState(QObject):
         current_loaded_file = self._loaded_files._capture_id_to_capture[self._selected_capture].parent_loadedfile
         smf = current_loaded_file.sigmf_file
         with measure_runtime(f"Save SigMF File: {smf.data_file}", log_level=logging.CRITICAL):
-            meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)["meta_fn"]
+            meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.sigmf_data_file_path)["meta_fn"]
             smf.tofile(file_path=meta_filename)
 
     def get_fft_config(self) -> FrequencyDomainComputationSpec:
@@ -306,40 +300,4 @@ class AppState(QObject):
                 self.set_fft_config(new_config)
         except ValueError:
             pass
-
-    #def save_as(self, parent):
-
-    #    options = QFileDialog.Options()
-    #    options |= QFileDialog.DontConfirmOverwrite
-    #    file_name, _ = QFileDialog.getSaveFileName(parent, "Save SigMF File As", "", "SigMF Files (*.sigmf-meta)", options=options)
-    #    if file_name:
-    #        log.info(f"Selected file for save as: {file_name}")
-    #        new_filenames_dict = sigmf.sigmffile.get_sigmf_filenames(file_name)
-    #        new_base_fn = new_filenames_dict.pop("base_fn")
-    #        existing = [ p for p in new_filenames_dict.values() if p.exists() ]
-
-    #        if existing:
-    #            reply = QMessageBox.question(parent, "OK to overwrite?",
-    #                    f"SIGMF File(s) already exist with the base name: \n{new_base_fn.name}\n Do you want to overwrite these file(s)?",
-    #                    QMessageBox.Yes | QMessageBox.Cancel)
-    #            if reply != QMessageBox.Yes:
-    #                return
-    #            
-    #        current_loaded_file = self._loaded_files.loaded_file_dict[self._selected_capture_fileid]
-    #        smf = current_loaded_file.sigmf_file
-
-    #        existing_filenames_dict = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.file_path)
-
-    #        with measure_runtime(f"Save As to {new_base_fn}"):
-    #            shutil.copy( 
-    #                existing_filenames_dict["data_fn"],
-    #                new_filenames_dict["data_fn"],
-    #            )
-    #            smf.set_data_file( new_filenames_dict["data_fn"] )
-    #            smf.tofile( new_filenames_dict["meta_fn"] )
-
-    #            # TODO: reload data content somehow?
-    #            current_loaded_file.file_path = new_filenames_dict["meta_fn"]
-
-
 
