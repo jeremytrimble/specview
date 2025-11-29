@@ -113,7 +113,7 @@ class RectSelectViewBox(pg.ViewBox):
                 self._start_pos = (mousePoint.x(), mousePoint.y())
                 # Start with a minimal rectangle
                 self._rect_roi.setPos(self._start_pos)
-                self._rect_roi.setSize((1.0, 1.0))
+                self._rect_roi.setSize((0.01, 0.01))
                 self._rect_roi.setVisible(True)
                 region = region_from_rectroi(self._rect_roi)  # Ensure the ROI is initialized
                 if self._cb:
