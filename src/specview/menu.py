@@ -233,8 +233,14 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     
     file_menu.addSeparator()
     #file_menu.addAction(save_as_action)
-    #file_menu.addSeparator()
-    #file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
+    
+    # Quit action
+    quit_action = QAction(text="&Quit", parent=parent)
+    quit_action.setShortcut("Ctrl+Q")
+    quit_action.triggered.connect(QApplication.instance().quit)
+    
+    file_menu.addSeparator()
+    file_menu.addAction(quit_action)
 
     annotation_from_selection = QAction(text="Annotation from Selection", parent=parent)
     annotation_from_selection.setShortcut("Ctrl+T")
