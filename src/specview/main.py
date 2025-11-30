@@ -165,8 +165,17 @@ class MainWindow(QMainWindow):
         self.resize(QSize(2000, 1500))
     
     def closeEvent(self, event):
-        """Save state before closing."""
+        """Save state before closing and check for unsaved changes."""
+        # Check for unsaved changes in any loaded files
+        app_state = QApplication.instance().app_state
+        if not app_state.check_unsaved_changes_and_prompt():
+            # User cancelled, don't close
+            event.ignore()
+            return
+        
+        # Save window state and close
         self._save_window_state()
+        event.accept()
         super().closeEvent(event)
 
     def _connect_app_signals(self):

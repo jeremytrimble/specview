@@ -179,6 +179,19 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
         app_state: AppState = QApplication.instance().app_state
         app_state.save_current_file()
 
+    def do_close():
+        app_state: AppState = QApplication.instance().app_state
+        # Close the currently selected file
+        if app_state._selected_capture is not None:
+            capture = app_state.get_capture_by_id(app_state._selected_capture)
+            if capture is not None:
+                file_id = capture.parent_loadedfile.file_id
+                app_state.close_file(file_id, prompt_save=True)
+
+    def do_save_all():
+        app_state: AppState = QApplication.instance().app_state
+        app_state.save_all_files()
+
     #def do_save_as():
     #    app_state: AppState = QApplication.instance().app_state
     #    app_state.save_as(parent)
@@ -186,6 +199,14 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     save_action = QAction(text="Save", parent=parent)
     save_action.setShortcut("Ctrl+S")
     save_action.triggered.connect(do_save)
+
+    save_all_action = QAction(text="Save All", parent=parent)
+    save_all_action.setShortcut("Ctrl+Shift+S")
+    save_all_action.triggered.connect(do_save_all)
+
+    close_action = QAction(text="Close File", parent=parent)
+    close_action.setShortcut("Ctrl+W")
+    close_action.triggered.connect(do_close)
 
     #save_as_action = QAction(text="Save As...", parent=parent)
     #save_as_action.setShortcut("Ctrl+Shift+S")
@@ -199,6 +220,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     file_menu.addMenu(recent_files_menu)
     file_menu.addSeparator()
     file_menu.addAction(save_action)
+    file_menu.addAction(close_action)
 
     
     # Add clear recent files action
@@ -232,6 +254,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     update_recent_files_menu()
     
     file_menu.addSeparator()
+    file_menu.addAction(save_all_action)
     #file_menu.addAction(save_as_action)
     
     # Quit action

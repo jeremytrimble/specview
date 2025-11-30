@@ -75,6 +75,7 @@ class AppState(QObject):
     time_interval_changed      = pyqtSignal( [object], name="time_interval_changed")    # tuple[float,float]|None
 
     loaded_files_changed = pyqtSignal([FileID, LoadedFileAction], name='loaded_files_changed') # emitted when a file is opened or closed
+    file_save_status_changed = pyqtSignal([FileID, bool], name='file_save_status_changed') # emitted with (FileID, is_saved) when a file's save status changes (if True, the file is saved, if False, it has unsaved changes)
     selected_capture_changed = pyqtSignal([CaptureID], name='selected_capture_changed') # emitted with (CaptureID) when a capture is selected
     selected_channel_changed = pyqtSignal(int, name='selected_channel_changed') # emitted with channel_index when a channel is selected
     selected_annotation_changed = pyqtSignal([object], name='selected_annotation_changed') # emitted with (AnnotationID) or None when an annotation is selected
@@ -124,6 +125,10 @@ class AppState(QObject):
         self._loaded_files = LoadedFilesCollection()
         self._loaded_files.set_file_load_or_unload_callback(self._on_file_load_or_unload)
         self._loaded_files.set_annotation_changed_callback(self._on_annotation_changed)
+        self._loaded_files.set_file_saved_status_changed(self._on_file_saved_status_changed)
+
+    def _on_file_saved_status_changed(self, fileid:FileID, is_saved:bool):
+        self.file_save_status_changed.emit(fileid, is_saved)
 
     def _on_file_load_or_unload(self, fileid:FileID, action:LoadedFileAction):
         self.loaded_files_changed.emit(fileid, action)
@@ -253,10 +258,130 @@ class AppState(QObject):
             return
 
         current_loaded_file = self._loaded_files._capture_id_to_capture[self._selected_capture].parent_loadedfile
-        smf = current_loaded_file.sigmf_file
-        with measure_runtime(f"Save SigMF File: {smf.data_file}", log_level=logging.CRITICAL):
-            meta_filename = sigmf.sigmffile.get_sigmf_filenames(current_loaded_file.sigmf_data_file_path)["meta_fn"]
-            smf.tofile(file_path=meta_filename)
+        with measure_runtime(f"Save SigMF File: {current_loaded_file.sigmf_data_file_path}", log_level=logging.CRITICAL):
+            current_loaded_file.save()
+
+    def save_all_files(self) -> None:
+        """
+        Save all loaded files that have unsaved changes.
+        Emits `loaded_files_changed` for each saved file so UI can refresh.
+        """
+        files = list(self._loaded_files.loaded_file_dict.values())
+        for lf in files:
+            try:
+                if lf.has_unsaved_changes:
+                    with measure_runtime(f"Save SigMF File: {lf.sigmf_data_file_path}", log_level=logging.CRITICAL):
+                        lf.save()
+                        log.info(f"Saved file: {lf.sigmf_data_file_path.name}")
+
+                        # TODO: shoudln't be necessary now, remove?
+                        # # Emit loaded_files_changed so views refresh their displays
+                        # try:
+                        #     self.loaded_files_changed.emit(lf.file_id, LoadedFileAction.OPENED)
+                        # except Exception:
+                        #     # If signal emission fails for any reason, continue
+                        #     pass
+            except Exception as e:
+                log.exception(f"Failed to save file {getattr(lf, 'sigmf_data_file_path', lf)}: {e}")
+
+    def check_unsaved_changes_and_prompt(self) -> bool:
+        """
+        Check all loaded files for unsaved changes and prompt to save.
+        
+        Returns:
+            True if it's safe to continue (all changes saved or discarded), 
+            False if the user cancelled
+        """
+        files_with_unsaved_changes = [
+            lf for lf in self._loaded_files.loaded_file_dict.values() 
+            if lf.has_unsaved_changes
+        ]
+        
+        if not files_with_unsaved_changes:
+            return True
+        
+        # Build message listing files with unsaved changes
+        if len(files_with_unsaved_changes) == 1:
+            file_name = files_with_unsaved_changes[0].sigmf_data_file_path.name
+            message = f"The file '{file_name}' has unsaved changes.\n\nDo you want to save before closing?"
+        else:
+            file_list = "\n".join(f"  • {lf.sigmf_data_file_path.name}" 
+                                 for lf in files_with_unsaved_changes)
+            message = (f"{len(files_with_unsaved_changes)} files have unsaved changes:\n\n"
+                      f"{file_list}\n\n"
+                      f"Do you want to save all files before closing?")
+        
+        reply = QMessageBox.question(
+            None,
+            "Unsaved Changes",
+            message,
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save
+        )
+        
+        if reply == QMessageBox.Cancel:
+            return False
+        elif reply == QMessageBox.Save:
+            # Save all files with unsaved changes
+            for lf in files_with_unsaved_changes:
+                lf.save()
+                log.info(f"Saved file: {lf.sigmf_data_file_path.name}")
+        
+        return True
+
+    def close_file(self, file_id: FileID, prompt_save: bool = True) -> bool:
+        """
+        Close a file, optionally prompting to save unsaved changes.
+        
+        Args:
+            file_id: The ID of the file to close
+            prompt_save: Whether to prompt the user to save unsaved changes
+            
+        Returns:
+            True if the file was closed, False if the user cancelled
+        """
+        loaded_file = self._loaded_files.get_loaded_file_from_id(file_id)
+        if loaded_file is None:
+            log.warning(f"File ID {file_id} not found")
+            return False
+        
+        # Check for unsaved changes
+        if prompt_save and loaded_file.has_unsaved_changes:
+            file_name = loaded_file.sigmf_data_file_path.name
+            reply = QMessageBox.question(
+                None,
+                "Unsaved Changes",
+                f"The file '{file_name}' has unsaved changes.\n\nDo you want to save before closing?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Save
+            )
+            
+            if reply == QMessageBox.Cancel:
+                return False
+            elif reply == QMessageBox.Save:
+                # Save the file
+                loaded_file.save()
+        
+        # If this file's capture is currently selected, we need to handle selection
+        # Check if any of the file's captures are selected
+        file_capture_ids = set(loaded_file._capture_id_to_capture.keys())
+        if self._selected_capture in file_capture_ids:
+            # Find another file to select, if available
+            other_files = [f for f_id, f in self._loaded_files.loaded_file_dict.items() if f_id != file_id]
+            if other_files:
+                # Select the first capture of the first other file
+                next_file = other_files[0]
+                next_capture = first_from_dict(next_file._capture_id_to_capture)
+                self.set_selected_capture(next_capture.capture_id)
+            else:
+                # No other files, clear selection
+                self._selected_capture = None
+                self.selected_capture_changed.emit(None)
+        
+        # Close the file
+        self._loaded_files.close_file(file_id)
+        log.info(f"Closed file: {loaded_file.sigmf_data_file_path.name}")
+        return True
 
     def get_fft_config(self) -> FrequencyDomainComputationSpec:
         """Get the current FFT configuration."""

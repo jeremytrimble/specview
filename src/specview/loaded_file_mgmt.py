@@ -97,6 +97,11 @@ class LoadedFilesCollection:
         self._annotation_changed_cb: typing.Callable[[AnnotationID, LoadedDictAction], None]|None = None
         self._file_load_or_unload_cb: typing.Callable[[FileID, LoadedFileAction], None]|None = None
 
+        self._file_saved_status_changed_cb: typing.Callable[[FileID, bool], None]|None = None
+
+    def set_file_saved_status_changed(self, cb: typing.Callable[[FileID, bool], None]) -> None:
+        self._file_saved_status_changed_cb = cb
+
     def set_file_load_or_unload_callback(self, cb: typing.Callable[[FileID, LoadedFileAction], None]) -> None:
         self._file_load_or_unload_cb = cb
 
@@ -135,6 +140,10 @@ class LoadedFilesCollection:
     def _on_child_annotation_changed(self, annotation_id:AnnotationID, action:LoadedDictAction) -> None:
         if self._annotation_changed_cb is not None:
             self._annotation_changed_cb(annotation_id, action)
+
+    def _on_loaded_file_changed(self, fileid: FileID, is_saved: bool) -> None:
+        if self._file_saved_status_changed_cb is not None:
+            self._file_saved_status_changed_cb(fileid, is_saved)
 
     def close_file(self, fileid: FileID):
         if fileid in self._fileid_to_loadedfile:
@@ -568,6 +577,9 @@ class LoadedFile:
         returned_file = sigmf.sigmffile.fromfile(self._sigmf_data_file_path, skip_checksum=True)
         assert isinstance(returned_file, sigmf.SigMFFile), "Loaded SigMF file is not a SigMFFile instance"
         self._sigmf_file = returned_file
+
+        # Set initial saved state.
+        # Note: Don't modify this variable directly, use _set_state_to_saved/unsaved methods instead.
         self._has_unsaved_changes = False
 
         self._enforce_sigmf_metadata_invariants()
@@ -610,6 +622,18 @@ class LoadedFile:
                 log.warning(f"Capture index {capture_idx} is missing required field: frequency. Setting to 0 Hz.")
                 capture[sigmf.SigMFFile.FREQUENCY_KEY] = 0.0  # default to 0 Hz if missing
 
+    def _set_state_to_unsaved(self):
+        previous_unsaved = self._has_unsaved_changes
+        self._has_unsaved_changes = True
+        if previous_unsaved != self._has_unsaved_changes:
+            self._parent_loaded_files._on_loaded_file_changed(self.file_id, not self._has_unsaved_changes)
+
+    def _set_state_to_saved(self):
+        previous_unsaved = self._has_unsaved_changes
+        self._has_unsaved_changes = False
+        if previous_unsaved != self._has_unsaved_changes:
+            self._parent_loaded_files._on_loaded_file_changed(self.file_id, not self._has_unsaved_changes)
+
     @property
     def sigmf_file(self) -> sigmf.SigMFFile:
         return self._sigmf_file
@@ -631,9 +655,14 @@ class LoadedFile:
     def has_unsaved_changes(self) -> bool:
         return self._has_unsaved_changes
 
+    def _sort_annotations_in_sigmf_file(self):
+        annotations_list : list[dict] = self._sigmf_file.get_annotations()
+        annotations_list.sort(key=lambda ann: ann.get(sigmf.SigMFFile.START_INDEX_KEY, 0))
+
     def save(self):
+        self._sort_annotations_in_sigmf_file()
         self._sigmf_file.tofile(self.sigmf_meta_file_path)
-        self._has_unsaved_changes = False
+        self._set_state_to_saved()
 
     # TODO: support save-as?
 
@@ -656,7 +685,7 @@ class LoadedFile:
         """
         self._parent_loaded_files._on_child_annotation_changed(annotation_id, action)
         if action in (LoadedDictAction.ADDED, LoadedDictAction.DELETED, LoadedDictAction.MODIFIED):
-            self._has_unsaved_changes = True
+            self._set_state_to_unsaved()
         
         if action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
             log.debug(f"Removing annotation ID {annotation_id} from LoadedFile {self.file_id} due to action {action}")
@@ -722,6 +751,7 @@ class LoadedFile:
         new_annotation = LoadedAnnotationDict.create_annotation_dict(self, annotation_id, annotation_dict)
         self._annotation_id_to_annotation[annotation_id] = new_annotation
         self._parent_loaded_files._annotation_id_to_annotations[annotation_id] = new_annotation  # store in the global mapping
+        self._set_state_to_unsaved()
         self._on_child_annotation_changed(annotation_id, LoadedDictAction.ADDED)
         return new_annotation
 
