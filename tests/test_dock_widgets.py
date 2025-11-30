@@ -133,4 +133,5 @@ def test_dock_widgets_have_object_names(app_with_window):
     assert window.specan_dock.objectName() == "SpectrumAnalyzer"
     assert window.waterfall_dock.objectName() == "Waterfall"
     assert window.annotation_dock.objectName() == "Annotations"
-    assert window.captures_dock.objectName() == "Captures"
+    assert "Captures" in window.captures_dock.objectName() 
+    assert "Files" in window.captures_dock.objectName() 
