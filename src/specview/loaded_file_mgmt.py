@@ -678,6 +678,10 @@ class LoadedFile:
     def file_id(self) -> FileID:
         return self._file_id
 
+    @property
+    def num_captures(self) -> int:
+        return len(self._capture_idx_to_capture)
+
     def _on_child_annotation_changed(self, annotation_id:AnnotationID, action:LoadedDictAction) -> None:
         """
         Called when one of our children annotations has changed.
