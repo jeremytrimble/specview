@@ -131,3 +131,40 @@ def test_loaded_files_collection(tmpdir):
 
     smf = sigmf.sigmffile.fromfile(sigmf_path)
     assert len(smf.get_annotations()) == 3 # original file had 2, we added one and saved (and did not save again after deletion)
+
+
+def test_capture_frequency_defaulting(tmpdir):
+    """Test that missing capture frequency fields are defaulted to 0 Hz."""
+    TOTAL_NUM_SAMPLES = 1_000_000
+    np.zeros(TOTAL_NUM_SAMPLES, dtype=np.complex64).tofile(tmpdir / "test.sigmf-data")
+    
+    # Create a SigMF file with a capture that is missing the frequency field
+    smf = SigMFFile()
+    smf.set_global_field(SigMFFile.DATATYPE_KEY, "cf32_le")
+    smf.set_global_field(SigMFFile.SAMPLE_RATE_KEY, 1e6)
+    
+    # Add a capture without frequency field by directly manipulating the metadata
+    capture_metadata = {SigMFFile.START_INDEX_KEY: 0}
+    # Deliberately omit SigMFFile.FREQUENCY_KEY
+    smf._metadata[SigMFFile.CAPTURE_KEY] = [capture_metadata]
+    
+    smf.set_data_file(str(tmpdir / "test.sigmf-data"))
+    smf.tofile(tmpdir / "test.sigmf-meta")
+    
+    # Load the file through LoadedFilesCollection
+    lfc = LoadedFilesCollection()
+    lf = lfc.load_file(Path(tmpdir / "test.sigmf-meta"))
+    
+    # Verify the file was loaded
+    assert lf is not None
+    
+    # Get the capture and verify frequency was defaulted to 0 Hz
+    captures = lf._capture_id_to_capture
+    assert len(captures) == 1
+    
+    capture = list(captures.values())[0]
+    assert capture.center_freq_Hz == 0.0
+    
+    # Also verify the underlying SigMF file has the frequency field set
+    assert SigMFFile.FREQUENCY_KEY in capture
+    assert capture[SigMFFile.FREQUENCY_KEY] == 0.0

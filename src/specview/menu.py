@@ -179,6 +179,19 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
         app_state: AppState = QApplication.instance().app_state
         app_state.save_current_file()
 
+    def do_close():
+        app_state: AppState = QApplication.instance().app_state
+        # Close the currently selected file
+        if app_state._selected_capture is not None:
+            capture = app_state.get_capture_by_id(app_state._selected_capture)
+            if capture is not None:
+                file_id = capture.parent_loadedfile.file_id
+                app_state.close_file(file_id, prompt_save=True)
+
+    def do_save_all():
+        app_state: AppState = QApplication.instance().app_state
+        app_state.save_all_files()
+
     #def do_save_as():
     #    app_state: AppState = QApplication.instance().app_state
     #    app_state.save_as(parent)
@@ -186,6 +199,14 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     save_action = QAction(text="Save", parent=parent)
     save_action.setShortcut("Ctrl+S")
     save_action.triggered.connect(do_save)
+
+    save_all_action = QAction(text="Save All", parent=parent)
+    save_all_action.setShortcut("Ctrl+Shift+S")
+    save_all_action.triggered.connect(do_save_all)
+
+    close_action = QAction(text="Close File", parent=parent)
+    close_action.setShortcut("Ctrl+W")
+    close_action.triggered.connect(do_close)
 
     #save_as_action = QAction(text="Save As...", parent=parent)
     #save_as_action.setShortcut("Ctrl+Shift+S")
@@ -199,6 +220,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     file_menu.addMenu(recent_files_menu)
     file_menu.addSeparator()
     file_menu.addAction(save_action)
+    file_menu.addAction(close_action)
 
     
     # Add clear recent files action
@@ -232,9 +254,16 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     update_recent_files_menu()
     
     file_menu.addSeparator()
+    file_menu.addAction(save_all_action)
     #file_menu.addAction(save_as_action)
-    #file_menu.addSeparator()
-    #file_menu.addAction("E&xit", lambda: print("Exit action triggered"))
+    
+    # Quit action
+    quit_action = QAction(text="&Quit", parent=parent)
+    quit_action.setShortcut("Ctrl+Q")
+    quit_action.triggered.connect(QApplication.instance().quit)
+    
+    file_menu.addSeparator()
+    file_menu.addAction(quit_action)
 
     annotation_from_selection = QAction(text="Annotation from Selection", parent=parent)
     annotation_from_selection.setShortcut("Ctrl+T")
@@ -329,7 +358,7 @@ def get_open_dir_dialog_initial_dir() -> str:
     app_state: AppState = QApplication.instance().app_state
     capture = app_state._loaded_files.get_capture_from_id( app_state._selected_capture )
     if capture is not None:
-        file_path = capture.parent_loadedfile.file_path
+        file_path = capture.parent_loadedfile.sigmf_data_file_path
         if file_path is not None and file_path.parent.exists():
             return str(file_path.parent)
 
@@ -344,14 +373,15 @@ def get_open_dir_dialog_initial_dir() -> str:
 def present_open_file_dialog(parent):
     """
     Present an open file dialog to the user.
+    Supports selecting multiple files at once.
     """
     options = QFileDialog.Options()
     options |= QFileDialog.ReadOnly
-    file_name, _ = QFileDialog.getOpenFileName(parent, "Open SigMF File", get_open_dir_dialog_initial_dir(), "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
-    if file_name:
-        log.info(f"Selected file: {file_name}")
+    file_names, _ = QFileDialog.getOpenFileNames(parent, "Open SigMF File(s)", get_open_dir_dialog_initial_dir(), "SigMF Files (*.sigmf-meta);;All Files (*)", options=options)
+    if file_names:
+        log.info(f"Selected files: {file_names}")
         app_state: AppState = QApplication.instance().app_state
-        app_state.load_sigmf_file(file_name)
-
+        for file_name in file_names:
+            app_state.load_sigmf_file(file_name)
     else:
         return None

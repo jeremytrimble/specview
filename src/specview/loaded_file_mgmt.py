@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import typing
 from pathlib import Path
 import enum
@@ -25,16 +26,15 @@ log = logging.getLogger("loaded_file_mgmt")
 import random
 rnd = random.Random(42)
 
-# These ids are unique within one run of the application, for internal use only
-#FileID = typing.NewType("FileID", str)
-#CaptureID = typing.NewType("CaptureID", str)
-#AnnotationID = typing.NewType("AnnotationID", str)
 
+# These ids are unique within one run of the application, for internal use only
 # Type aliases:
 FileID = str
 CaptureID = str
 AnnotationID = str
 
+class MalformedSigMFFile(ValueError):
+    pass
 
 class LoadedThingCounter:
     def __init__(self, prefix:str):
@@ -97,13 +97,27 @@ class LoadedFilesCollection:
         self._annotation_changed_cb: typing.Callable[[AnnotationID, LoadedDictAction], None]|None = None
         self._file_load_or_unload_cb: typing.Callable[[FileID, LoadedFileAction], None]|None = None
 
+        self._file_saved_status_changed_cb: typing.Callable[[FileID, bool], None]|None = None
+
+    def set_file_saved_status_changed(self, cb: typing.Callable[[FileID, bool], None]) -> None:
+        self._file_saved_status_changed_cb = cb
+
     def set_file_load_or_unload_callback(self, cb: typing.Callable[[FileID, LoadedFileAction], None]) -> None:
         self._file_load_or_unload_cb = cb
 
     def set_annotation_changed_callback(self, cb: typing.Callable[[AnnotationID, LoadedDictAction], None]) -> None:
         self._annotation_changed_cb = cb
 
-    def load_file(self, file_path: Path) -> LoadedFile:
+    def load_file(self, file_path: Path) -> LoadedFile | None:
+
+        sigmf_files = resolve_sigmf_filename(file_path)
+
+        # Check if file is already loaded
+        for loaded_file in self.loaded_file_dict.values():
+            if loaded_file.sigmf_data_file_path == sigmf_files.data_filename:
+                log.info(f"File already loaded: {file_path}")
+                return None
+
         loaded_file = LoadedFile(file_path=file_path, parent_loaded_files=self)
         self._fileid_to_loadedfile[loaded_file._file_id] = loaded_file
         if self._file_load_or_unload_cb is not None:
@@ -126,6 +140,10 @@ class LoadedFilesCollection:
     def _on_child_annotation_changed(self, annotation_id:AnnotationID, action:LoadedDictAction) -> None:
         if self._annotation_changed_cb is not None:
             self._annotation_changed_cb(annotation_id, action)
+
+    def _on_loaded_file_changed(self, fileid: FileID, is_saved: bool) -> None:
+        if self._file_saved_status_changed_cb is not None:
+            self._file_saved_status_changed_cb(fileid, is_saved)
 
     def close_file(self, fileid: FileID):
         if fileid in self._fileid_to_loadedfile:
@@ -522,6 +540,16 @@ class LoadedAnnotationDict(dict):
         self[sigmf.SigMFFile.FLO_KEY] = current_center - half_bw
         self[sigmf.SigMFFile.FHI_KEY] = current_center + half_bw
 
+@dataclass
+class SigMFFilenames:
+    meta_filename: Path
+    data_filename: Path
+
+def resolve_sigmf_filename(file_path: Path) -> SigMFFilenames:
+    sigmf_files_dict = sigmf.sigmffile.get_sigmf_filenames(file_path)
+    data_file_path: Path = Path(sigmf_files_dict['data_fn']).resolve()
+    meta_file_path: Path = Path(sigmf_files_dict['meta_fn']).resolve()
+    return SigMFFilenames(meta_filename=meta_file_path, data_filename=data_file_path)
 
 class LoadedFile:
     """
@@ -535,15 +563,32 @@ class LoadedFile:
         # sigmf_file is the SigMFFile object loaded from that file
         self._parent_loaded_files = parent_loaded_files
 
+        # TODO: change this if we decide to support collections or archives
+        sigmf_files = resolve_sigmf_filename(file_path)
+        self._sigmf_data_file_path: Path = sigmf_files.data_filename
+        self._sigmf_meta_file_path: Path = sigmf_files.meta_filename
+
+        if not self._sigmf_data_file_path.exists():
+            raise FileNotFoundError(f"SigMF data file not found: {self._sigmf_data_file_path}")
+        if not self._sigmf_meta_file_path.exists():
+            raise FileNotFoundError(f"SigMF meta file not found: {self._sigmf_meta_file_path}")
+
         # TODO: checksum computation is skipped to improve load time -- verify checksum in background?
-        self._sigmf_file: sigmf.SigMFFile = sigmf.sigmffile.fromfile(file_path, skip_checksum=True)
+        returned_file = sigmf.sigmffile.fromfile(self._sigmf_data_file_path, skip_checksum=True)
+        assert isinstance(returned_file, sigmf.SigMFFile), "Loaded SigMF file is not a SigMFFile instance"
+        self._sigmf_file = returned_file
+
+        # Set initial saved state.
+        # Note: Don't modify this variable directly, use _set_state_to_saved/unsaved methods instead.
         self._has_unsaved_changes = False
+
+        self._enforce_sigmf_metadata_invariants()
 
         # "CCAs": Chunkwise Computed Arrays
         self._time_ccas: dict[TimeDomainComputationSpec, TimeDomainChunkwiseComputedArray] = {}
         self._freq_ccas: dict[FrequencyDomainComputationSpec, FrequencyDomainChunkwiseComputedArray] = {}
 
-        self._file_path: Path = Path(self._sigmf_file.data_file)  # This is the path to the .sigmf-data file
+        # This is the path to the .sigmf-data file
         self._file_id: FileID = loaded_file_counter.get_next_id()
 
         self._capture_idx_to_capture: dict[int, LoadedCaptureDict] = {}
@@ -566,6 +611,29 @@ class LoadedFile:
         for annotation_id in self._annotation_id_to_annotation:
             self._on_child_annotation_changed(annotation_id, LoadedDictAction.LOADED)
 
+    def _enforce_sigmf_metadata_invariants(self):
+        smf: sigmf.sigmffile.SigMFFile = self._sigmf_file
+
+        #if smf.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY) is None:
+        #    raise MalformedSigMFFile("SigMF file is missing required global field: sample_rate")
+
+        for capture_idx, capture in enumerate(smf.get_captures()):
+            if sigmf.SigMFFile.FREQUENCY_KEY not in capture:
+                log.warning(f"Capture index {capture_idx} is missing required field: frequency. Setting to 0 Hz.")
+                capture[sigmf.SigMFFile.FREQUENCY_KEY] = 0.0  # default to 0 Hz if missing
+
+    def _set_state_to_unsaved(self):
+        previous_unsaved = self._has_unsaved_changes
+        self._has_unsaved_changes = True
+        if previous_unsaved != self._has_unsaved_changes:
+            self._parent_loaded_files._on_loaded_file_changed(self.file_id, not self._has_unsaved_changes)
+
+    def _set_state_to_saved(self):
+        previous_unsaved = self._has_unsaved_changes
+        self._has_unsaved_changes = False
+        if previous_unsaved != self._has_unsaved_changes:
+            self._parent_loaded_files._on_loaded_file_changed(self.file_id, not self._has_unsaved_changes)
+
     @property
     def sigmf_file(self) -> sigmf.SigMFFile:
         return self._sigmf_file
@@ -587,19 +655,32 @@ class LoadedFile:
     def has_unsaved_changes(self) -> bool:
         return self._has_unsaved_changes
 
+    def _sort_annotations_in_sigmf_file(self):
+        annotations_list : list[dict] = self._sigmf_file.get_annotations()
+        annotations_list.sort(key=lambda ann: ann.get(sigmf.SigMFFile.START_INDEX_KEY, 0))
+
     def save(self):
-        self._sigmf_file.tofile(self._file_path.with_suffix(".sigmf-meta"))
-        self._has_unsaved_changes = False
+        self._sort_annotations_in_sigmf_file()
+        self._sigmf_file.tofile(self.sigmf_meta_file_path)
+        self._set_state_to_saved()
 
     # TODO: support save-as?
 
     @property
-    def file_path(self) -> Path:
-        return self._file_path
+    def sigmf_meta_file_path(self) -> Path:
+        return self._sigmf_meta_file_path
+
+    @property
+    def sigmf_data_file_path(self) -> Path:
+        return self._sigmf_data_file_path
 
     @property
     def file_id(self) -> FileID:
         return self._file_id
+
+    @property
+    def num_captures(self) -> int:
+        return len(self._capture_idx_to_capture)
 
     def _on_child_annotation_changed(self, annotation_id:AnnotationID, action:LoadedDictAction) -> None:
         """
@@ -608,7 +689,7 @@ class LoadedFile:
         """
         self._parent_loaded_files._on_child_annotation_changed(annotation_id, action)
         if action in (LoadedDictAction.ADDED, LoadedDictAction.DELETED, LoadedDictAction.MODIFIED):
-            self._has_unsaved_changes = True
+            self._set_state_to_unsaved()
         
         if action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
             log.debug(f"Removing annotation ID {annotation_id} from LoadedFile {self.file_id} due to action {action}")
@@ -674,6 +755,7 @@ class LoadedFile:
         new_annotation = LoadedAnnotationDict.create_annotation_dict(self, annotation_id, annotation_dict)
         self._annotation_id_to_annotation[annotation_id] = new_annotation
         self._parent_loaded_files._annotation_id_to_annotations[annotation_id] = new_annotation  # store in the global mapping
+        self._set_state_to_unsaved()
         self._on_child_annotation_changed(annotation_id, LoadedDictAction.ADDED)
         return new_annotation
 
@@ -702,7 +784,7 @@ class LoadedFile:
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = TimeDomainChunkwiseComputedArray(
-                signal_file = self.sigmf_file.data_file,
+                signal_file = self.sigmf_data_file_path,
                 signal_file_datatype = sample_dtype,
                 comp_spec= comp_spec,
                 num_channels=num_channels,
@@ -725,7 +807,7 @@ class LoadedFile:
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = FrequencyDomainChunkwiseComputedArray(
-                signal_file= self.sigmf_file.data_file,
+                signal_file= self.sigmf_data_file_path,
                 signal_file_datatype= sample_dtype,
                 comp_spec= comp_spec,
                 num_input_channels= num_channels,

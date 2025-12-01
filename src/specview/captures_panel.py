@@ -1,11 +1,12 @@
 from PyQt5.QtWidgets import (
     QTreeView, QTreeWidgetItem, QVBoxLayout, QSplitter, QWidget, 
     QTreeWidget, QApplication, QAbstractItemView, QLabel, QFormLayout,
-    QPushButton, QMenu
+    QPushButton, QMenu, QHBoxLayout
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap, QPainter, QColor
 
-from .loaded_file_mgmt import LoadedFile
+from .loaded_file_mgmt import LoadedFile, FileID
 from .util import duration_format, freq_format
 from .json_editor_dialog import JSONEditorDialog
 
@@ -42,7 +43,35 @@ class CapturesPanel(QWidget):
 
         self.file_path_label = QLabel("File Path:", self)
         self.file_path_value = QLabel("", self)
-        self.metadata_layout.addRow(self.file_path_label, self.file_path_value)
+
+        # Save status icon (green = saved, red = unsaved). We'll place it to the
+        # right of the file path value inside a small horizontal container.
+        self.save_status_icon = QLabel(self)
+        self.save_status_icon.setFixedSize(16, 16)
+
+        # Create pixmaps for saved/unsaved states
+        def _make_circle_pixmap(color: QColor, size: int = 14) -> QPixmap:
+            pix = QPixmap(size, size)
+            pix.fill(Qt.transparent)
+            p = QPainter(pix)
+            p.setRenderHint(QPainter.Antialiasing)
+            p.setBrush(color)
+            p.setPen(Qt.NoPen)
+            p.drawEllipse(0, 0, size - 1, size - 1)
+            p.end()
+            return pix
+
+        self._saved_pixmap = _make_circle_pixmap(QColor(0, 200, 0), size=12)
+        self._unsaved_pixmap = _make_circle_pixmap(QColor(200, 0, 0), size=12)
+
+        # Container for file path value + status icon
+        fp_container = QWidget(self)
+        fp_layout = QHBoxLayout(fp_container)
+        fp_layout.setContentsMargins(0, 0, 0, 0)
+        fp_layout.addWidget(self.file_path_value)
+        fp_layout.addStretch(1)
+        fp_layout.addWidget(self.save_status_icon)
+        self.metadata_layout.addRow(self.file_path_label, fp_container)
 
         self.sample_rate_label = QLabel("Sample Rate:", self)
         self.sample_rate_value = QLabel("", self)
@@ -98,6 +127,7 @@ class CapturesPanel(QWidget):
         app_state = self._get_app_state()
         app_state.loaded_files_changed.connect(self.populate_tree)
         app_state.selected_capture_changed.connect(self.on_capture_changed)
+        app_state.file_save_status_changed.connect(self._on_file_save_status_changed)
 
     def _on_current_item_changed(self, selected: QTreeWidgetItem|None, deselected:QTreeWidgetItem|None):
         #log.debug(f"current item changed: {args=}, {kwargs=}")
@@ -128,13 +158,15 @@ class CapturesPanel(QWidget):
         loaded_file = app_state._loaded_files.get_capture_from_id(capture_id).parent_loadedfile
 
         sigmf_meta = loaded_file.sigmf_file.get_global_info()
-        self.file_path_value.setText(str(loaded_file.file_path))
+        self.file_path_value.setText(str(loaded_file.sigmf_data_file_path))
         self.sample_rate_value.setText(freq_format(loaded_file.sample_rate_Hz))
         self.duration_value.setText(duration_format(loaded_file.sigmf_file.sample_count / loaded_file.sample_rate_Hz))
         self.num_channels_value.setText(str(loaded_file.num_channels))
         self.datatype_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.DATATYPE_KEY, "N/A")))
         self.description_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.DESCRIPTION_KEY, "N/A")))
         self.author_value.setText(str(sigmf_meta.get(sigmf.SigMFFile.AUTHOR_KEY, "N/A")))
+        # Update the save-status icon for the selected file
+        self._update_save_status_icon_in_panel(loaded_file)
         
     def _on_view_json_clicked(self):
         """Open a dialog to view the full global metadata as JSON."""
@@ -153,9 +185,38 @@ class CapturesPanel(QWidget):
             parent=self,
             json_data=global_metadata,
             read_only=True,
-            title=f"Global SigMF Metadata - {loaded_file.file_path.name}"
+            title=f"Global SigMF Metadata - {loaded_file.sigmf_data_file_path.name}"
         )
         dialog.exec_()
+
+    def _update_save_status_icon_in_panel(self, loaded_file: LoadedFile | None):
+        """Set the save/unsaved icon for the provided loaded file.
+        If loaded_file is None, hide the icon.
+        """
+        if loaded_file is None:
+            self.save_status_icon.hide()
+            return
+
+        if loaded_file.has_unsaved_changes:
+            self.save_status_icon.setPixmap(self._unsaved_pixmap)
+            self.save_status_icon.setToolTip("File has unsaved changes")
+            self.save_status_icon.show()
+        else:
+            self.save_status_icon.setPixmap(self._saved_pixmap)
+            self.save_status_icon.setToolTip("File is saved")
+            self.save_status_icon.show()
+
+    def _refresh_save_icon_for_selected(self):
+        """Helper invoked when files list changes; refresh icon for selected file."""
+        app_state = self._get_app_state()
+        if app_state._selected_capture is None:
+            self._update_save_status_icon_in_panel(None)
+            return
+        capture = app_state.get_capture_by_id(app_state._selected_capture)
+        if capture is None:
+            self._update_save_status_icon_in_panel(None)
+            return
+        self._update_save_status_icon_in_panel(capture.parent_loadedfile)
 
     def _on_tree_context_menu(self, position):
         """Show context menu for tree items."""
@@ -163,17 +224,89 @@ class CapturesPanel(QWidget):
         if item is None:
             return
         
-        # Only show menu for capture items (not file items)
-        if not hasattr(item, "capture_id"):
-            return
-        
         menu = QMenu(self)
-        view_json_action = menu.addAction("View Capture JSON")
+        
+        # Check if it's a capture item or a file item
+        if hasattr(item, "capture_id"):
+            # Capture item - show capture-specific menu
+            view_json_action = menu.addAction("View Capture JSON")
+            menu.addSeparator()
+            
+            # Get the parent file for this capture
+            app_state = self._get_app_state()
+            capture = app_state.get_capture_by_id(item.capture_id)
+            if capture is not None:
+                loaded_file = capture.parent_loadedfile
+                
+                # Add save action
+                save_file_action = menu.addAction("Save File")
+                if not loaded_file.has_unsaved_changes:
+                    save_file_action.setEnabled(False)
+                
+                # Add close file action
+                close_file_action = menu.addAction("Close File")
+        else:
+            # File item - show file-specific menu
+            # Get the loaded file from this item
+            app_state = self._get_app_state()
+            loaded_file = None
+            
+            # Find the loaded file by file_id if available, otherwise by filename
+            if hasattr(item, 'file_id'):
+                loaded_file = app_state._loaded_files.get_loaded_file_from_id(item.file_id)
+            else:
+                # Fallback: match by filename (strip asterisk if present)
+                item_text = item.text(0).lstrip('* ')
+                for lf in app_state._loaded_files.loaded_file_dict.values():
+                    if lf.sigmf_data_file_path.name == item_text:
+                        loaded_file = lf
+                        break
+            
+            if loaded_file is not None:
+                # Add save action
+                save_file_action = menu.addAction("Save File")
+                if not loaded_file.has_unsaved_changes:
+                    save_file_action.setEnabled(False)
+                
+                # Add close file action
+                close_file_action = menu.addAction("Close File")
         
         action = menu.exec_(self.tree_widget.viewport().mapToGlobal(position))
         
-        if action == view_json_action:
+        if action is None:
+            return
+        
+        if hasattr(item, "capture_id") and action.text() == "View Capture JSON":
             self._view_capture_json(item.capture_id)
+        elif action.text() == "Save File":
+            # Get the loaded file
+            if hasattr(item, "capture_id"):
+                app_state = self._get_app_state()
+                capture = app_state.get_capture_by_id(item.capture_id)
+                if capture is not None:
+                    loaded_file = capture.parent_loadedfile
+                    loaded_file.save()
+                    log.info(f"Saved file: {loaded_file.sigmf_data_file_path.name}")
+                    self._update_file_item_in_tree_view(loaded_file)
+            else:
+                # File item
+                if loaded_file is not None:
+                    loaded_file.save()
+                    log.info(f"Saved file: {loaded_file.sigmf_data_file_path.name}")
+                    self._update_file_item_in_tree_view(loaded_file)
+        elif action.text() == "Close File":
+            # Get the loaded file and close it
+            if hasattr(item, "capture_id"):
+                app_state = self._get_app_state()
+                capture = app_state.get_capture_by_id(item.capture_id)
+                if capture is not None:
+                    file_id = capture.parent_loadedfile.file_id
+                    app_state.close_file(file_id, prompt_save=True)
+            else:
+                # File item
+                if loaded_file is not None:
+                    app_state = self._get_app_state()
+                    app_state.close_file(loaded_file.file_id, prompt_save=True)
     
     def _view_capture_json(self, capture_id: str):
         """Open a dialog to view the capture's raw JSON metadata."""
@@ -190,9 +323,37 @@ class CapturesPanel(QWidget):
             parent=self,
             json_data=capture_data,
             read_only=True,
-            title=f"Capture Metadata - {capture.parent_loadedfile.file_path.name} - Capture {capture.capture_idx_in_file:02d}"
+            title=f"Capture Metadata - {capture.parent_loadedfile.sigmf_data_file_path.name} - Capture {capture.capture_idx_in_file:02d}"
         )
         dialog.exec_()
+
+    def _on_file_save_status_changed(self, file_id:FileID, is_saved:bool) -> None:
+        """Update file display when annotations change (to show unsaved indicator)."""
+        # Find which file this annotation belongs to and update its display
+        app_state = self._get_app_state()
+        loaded_file = app_state._loaded_files.get_loaded_file_from_id(file_id)
+
+        if loaded_file is not None:
+            self._update_file_item_in_tree_view(loaded_file)
+            if app_state._selected_capture is not None:
+                selected_capture = app_state.get_capture_by_id(app_state._selected_capture)
+                if selected_capture is not None and selected_capture.parent_loadedfile == loaded_file:
+                    # Update save status icon if the selected capture's file changed
+                    self._update_save_status_icon_in_panel(loaded_file)
+    
+    def _update_file_item_in_tree_view(self, loaded_file: LoadedFile):
+        """Update the display of a file item to show unsaved changes indicator."""
+        # Find the tree item for this file
+        for i in range(self.tree_widget.topLevelItemCount()):
+            item = self.tree_widget.topLevelItem(i)
+            if hasattr(item, 'file_id') and item.file_id == loaded_file.file_id:
+                # Update the text to show/hide the unsaved indicator
+                file_name = loaded_file.sigmf_data_file_path.name
+                if loaded_file.has_unsaved_changes:
+                    item.setText(0, f"* {file_name}")
+                else:
+                    item.setText(0, file_name)
+                break
 
     def populate_tree(self):
         app_state = self._get_app_state()
@@ -205,7 +366,13 @@ class CapturesPanel(QWidget):
         for loaded_file in app_state._loaded_files.loaded_file_dict.values():
             log.debug(f" populating for {loaded_file}")
             loaded_file: LoadedFile
-            file_item = QTreeWidgetItem([loaded_file.file_path.name])
+            # Add asterisk prefix if file has unsaved changes
+            file_name = loaded_file.sigmf_data_file_path.name
+            if loaded_file.has_unsaved_changes:
+                file_name = f"* {file_name}"
+            file_item = QTreeWidgetItem([file_name])
+            # Store file_id for later lookup
+            file_item.file_id = loaded_file.file_id
 
             for capture in loaded_file._capture_id_to_capture.values():
                 #log.debug(f" populating for {capture}")

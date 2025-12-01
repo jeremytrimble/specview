@@ -23,6 +23,8 @@ from .monotonic_axis import MonotonicAxis
 from .annotations_table import AnnotationsTable
 from .captures_panel import CapturesPanel
 from .ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
+from .loaded_file_mgmt import LoadedFile, LoadedFileAction, FileID, CaptureID, LoadedDictAction
+from .app_state import AppState
 
 log = logging.getLogger("specview")
 
@@ -58,7 +60,7 @@ class MainWindow(QMainWindow):
         self.specan_dock = self._create_dock_widget("Spectrum Analyzer", self.specan_view)
         self.waterfall_dock = self._create_dock_widget("Waterfall", self.waterfall_view)
         self.annotation_dock = self._create_dock_widget("Annotations", self.annotation_table)
-        self.captures_dock = self._create_dock_widget("Captures", self.captures_panel)
+        self.captures_dock = self._create_dock_widget("Files/Captures", self.captures_panel)
 
         self.time_dock.sizePolicy().setVerticalStretch(1)
         self.specan_dock.sizePolicy().setVerticalStretch(1)
@@ -165,17 +167,63 @@ class MainWindow(QMainWindow):
         self.resize(QSize(2000, 1500))
     
     def closeEvent(self, event):
-        """Save state before closing."""
+        """Save state before closing and check for unsaved changes."""
+        # Check for unsaved changes in any loaded files
+        app_state = QApplication.instance().app_state
+        if not app_state.check_unsaved_changes_and_prompt():
+            # User cancelled, don't close
+            event.ignore()
+            return
+        
+        # Save window state and close
         self._save_window_state()
+        event.accept()
         super().closeEvent(event)
 
     def _connect_app_signals(self):
-        app_state = QApplication.instance().app_state
+        app_state :AppState = QApplication.instance().app_state
         app_state.cursor_frequency_changed.connect(self._update_status_bar)
         app_state.cursor_time_changed.connect(self._update_status_bar)
         app_state.frequency_interval_changed.connect(self._update_status_bar)
         app_state.time_interval_changed.connect(self._update_status_bar)
 
+        app_state.loaded_files_changed.connect(self._update_captures_dock_title)
+        app_state.annotation_changed.connect(self._update_annotations_dock_title)
+        app_state.selected_capture_changed.connect(self._update_captures_and_annotation_dock_titles)
+
+    def _update_annotations_dock_title(self, *args, **kwargs):
+        app_state: AppState = QApplication.instance().app_state
+        current_capture_id = app_state._selected_capture
+        if current_capture_id is not None:
+            current_file = app_state._loaded_files._capture_id_to_capture[current_capture_id].parent_loadedfile
+            num_annotations_in_current_file = len(current_file._annotation_id_to_annotation)
+            title = f"Annotations ({num_annotations_in_current_file})"
+        else:
+            title = "Annotations"
+
+        self.annotation_dock.setWindowTitle(title)
+
+    def _update_captures_and_annotation_dock_titles(self):
+        self._update_captures_dock_title()
+        self._update_annotations_dock_title()
+
+    def _update_captures_dock_title(self, *args, **kwargs):
+        app_state: AppState = QApplication.instance().app_state
+        num_loaded_files = len(app_state._loaded_files._fileid_to_loadedfile)
+
+        num_captures_in_current_file = 0
+
+        current_capture_id = app_state._selected_capture
+        if current_capture_id is not None:
+            current_file = app_state._loaded_files._capture_id_to_capture[current_capture_id].parent_loadedfile
+            num_captures_in_current_file = current_file.num_captures
+
+        title = f"Files ({num_loaded_files}) / Captures"
+        if num_captures_in_current_file > 0:
+            title = f"{title} ({num_captures_in_current_file})"
+
+        self.captures_dock.setWindowTitle(title)
+    
     def _update_status_bar(self):
         app_state = QApplication.instance().app_state
 
