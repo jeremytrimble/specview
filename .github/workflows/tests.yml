@@ -8,7 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     
     steps:
     - uses: actions/checkout@v4
@@ -18,7 +21,8 @@ jobs:
       with:
         python-version: "3.12"
     
-    - name: Install Qt dependencies
+    - name: Install Qt dependencies (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y qt5-qmake qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools libqt5gui5
