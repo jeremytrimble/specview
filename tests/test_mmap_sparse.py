@@ -91,7 +91,7 @@ def test_mmap_sparse_file(tmp_path):
         mm2.close()
     
     # Verify the file now uses more blocks after writing to the sparse region
-    if hasattr(os.stat(temp_file), 'st_blocks'):
+    if hasattr(stat_info, 'st_blocks'):
         stat_info_after = os.stat(temp_file)
         blocks_used_after = stat_info_after.st_blocks
         # After writing to the sparse region, more blocks should be allocated
