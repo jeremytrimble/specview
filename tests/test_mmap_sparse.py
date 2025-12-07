@@ -19,11 +19,16 @@ def test_mmap_sparse_file(tmp_path):
     # Create a temporary file path
     temp_file = tmp_path / "sparse_test.dat"
     
+    # Get the page size for proper mmap alignment
+    # On Unix, mmap offsets must be aligned to page boundaries
+    page_size = mmap.PAGESIZE if hasattr(mmap, 'PAGESIZE') else mmap.ALLOCATIONGRANULARITY
+    
     # Step 1: Create a sparse file
     # We'll create a file with sparse region at the beginning, then write data further in
     with open(temp_file, "wb") as f:
-        # Seek past the beginning to create a sparse region (first 4096 bytes will be sparse)
-        f.seek(4096)
+        # Seek past the beginning to create a sparse region
+        # Use page_size to ensure proper alignment for mmap
+        f.seek(page_size)
         # Write some data in a non-sparse region
         non_sparse_data = b"FIRST_REGION_DATA_CONTENT_123"
         f.write(non_sparse_data)
@@ -32,14 +37,14 @@ def test_mmap_sparse_file(tmp_path):
     # Verify the sparse region is actually sparse (reads as zeros)
     with open(temp_file, "rb") as f:
         f.seek(0)
-        sparse_region_content = f.read(4096)
-        assert sparse_region_content == b'\x00' * 4096, \
+        sparse_region_content = f.read(page_size)
+        assert sparse_region_content == b'\x00' * page_size, \
             "Sparse region should read as zeros initially"
     
     # Check filesystem-level sparseness if supported (st_blocks available on POSIX)
     stat_info = os.stat(temp_file)
     file_size = stat_info.st_size
-    expected_size = 4096 + len(non_sparse_data)
+    expected_size = page_size + len(non_sparse_data)
     assert file_size == expected_size, \
         f"File size should be {expected_size} bytes"
     
@@ -63,8 +68,8 @@ def test_mmap_sparse_file(tmp_path):
     
     # Step 2: Memory-map the non-sparse region
     with open(temp_file, "r+b") as f:
-        # Map the region where we wrote non_sparse_data (starting at offset 4096)
-        mm1 = mmap.mmap(f.fileno(), len(non_sparse_data), offset=4096)
+        # Map the region where we wrote non_sparse_data (starting at page_size offset)
+        mm1 = mmap.mmap(f.fileno(), len(non_sparse_data), offset=page_size)
         
         # Verify the first mapping contains the expected data
         assert mm1[:] == non_sparse_data, "First mapping should contain the data we wrote"
@@ -112,5 +117,5 @@ def test_mmap_sparse_file(tmp_path):
         f.seek(0)
         assert f.read(len(sparse_region_data)) == sparse_region_data, "Sparse region data should persist"
         
-        f.seek(4096)
+        f.seek(page_size)
         assert f.read(len(non_sparse_data)) == non_sparse_data, "Original non-sparse region data should persist"
