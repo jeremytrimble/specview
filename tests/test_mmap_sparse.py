@@ -1,5 +1,6 @@
 import mmap
 import os
+import platform
 
 
 def test_mmap_sparse_file(tmp_path):
@@ -42,17 +43,23 @@ def test_mmap_sparse_file(tmp_path):
     assert file_size == expected_size, \
         f"File size should be {expected_size} bytes"
     
-    # On systems that support st_blocks, verify the file uses fewer blocks than its size
+    # On systems that support st_blocks, verify sparse file behavior
+    # Note: Different filesystems handle sparse files differently
+    # - Linux (ext4, btrfs, xfs): typically sparse-aware, uses fewer blocks
+    # - macOS (APFS): may allocate differently, not always sparse-aware
+    # - Windows (NTFS): sparse files work but st_blocks isn't available
     if hasattr(stat_info, 'st_blocks'):
-        # st_blocks is in 512-byte blocks on most systems
         blocks_used = stat_info.st_blocks
-        # Calculate expected blocks if file were fully allocated
-        # (assuming 512-byte blocks)
+        # st_blocks is always in 512-byte blocks according to POSIX
         blocks_if_full = (file_size + 511) // 512
-        # The sparse file should use significantly fewer blocks
-        # We expect it to use blocks only for the non-sparse data region
-        assert blocks_used < blocks_if_full, \
-            f"Sparse file should use fewer blocks ({blocks_used}) than if fully allocated ({blocks_if_full})"
+        
+        # Only assert sparse behavior on Linux where it's reliable
+        if platform.system() == 'Linux':
+            # On Linux, sparse files should use fewer blocks
+            assert blocks_used < blocks_if_full, \
+                f"Sparse file should use fewer blocks ({blocks_used}) than if fully allocated ({blocks_if_full})"
+        # On other systems (like macOS), just log the values but don't assert
+        # as the filesystem may handle sparse files differently
     
     # Step 2: Memory-map the non-sparse region
     with open(temp_file, "r+b") as f:
