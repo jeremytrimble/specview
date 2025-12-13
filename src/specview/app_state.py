@@ -1,6 +1,6 @@
 from __future__ import annotations
-from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QSettings
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QFileDialog, QMessageBox
+from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QSettings
+from PyQt6.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QFileDialog, QMessageBox
 
 from contextlib import contextmanager
 

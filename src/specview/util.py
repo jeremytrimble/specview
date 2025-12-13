@@ -7,7 +7,7 @@ from contextlib import contextmanager
 #from functools import partial
 import typing
 
-from PyQt5.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget
 
 import pyqtgraph as pg
 import functools

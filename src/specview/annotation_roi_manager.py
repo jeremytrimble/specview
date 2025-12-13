@@ -1,7 +1,7 @@
 from typing import Union, TypeVar, Generic, Dict
 from dataclasses import dataclass
 import logging
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 import pyqtgraph as pg
 import sigmf
 

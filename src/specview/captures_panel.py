@@ -1,10 +1,10 @@
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QTreeView, QTreeWidgetItem, QVBoxLayout, QSplitter, QWidget, 
     QTreeWidget, QApplication, QAbstractItemView, QLabel, QFormLayout,
     QPushButton, QMenu, QHBoxLayout
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QPainter, QColor
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QPainter, QColor
 
 from .loaded_file_mgmt import LoadedFile, FileID
 from .util import duration_format, freq_format
@@ -28,10 +28,10 @@ class CapturesPanel(QWidget):
         self.captures_layout = QVBoxLayout(self.captures_widget)
         
         self.tree_widget = QTreeWidget(self)
-        self.tree_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tree_widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.tree_widget.setColumnCount(4)
         self.tree_widget.setHeaderLabels(["Capture ID", "Center Freq", "Duration", "Date/Time"])
-        self.tree_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_widget.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.captures_layout.addWidget(self.tree_widget)
         
@@ -52,11 +52,11 @@ class CapturesPanel(QWidget):
         # Create pixmaps for saved/unsaved states
         def _make_circle_pixmap(color: QColor, size: int = 14) -> QPixmap:
             pix = QPixmap(size, size)
-            pix.fill(Qt.transparent)
+            pix.fill(Qt.GlobalColor.transparent)
             p = QPainter(pix)
-            p.setRenderHint(QPainter.Antialiasing)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
             p.setBrush(color)
-            p.setPen(Qt.NoPen)
+            p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(0, 0, size - 1, size - 1)
             p.end()
             return pix
@@ -106,7 +106,7 @@ class CapturesPanel(QWidget):
         for label in [self.file_path_value, self.sample_rate_value, self.duration_value,
                       self.num_channels_value, self.datatype_value,
                       self.description_value, self.author_value]:
-            label.setTextInteractionFlags(label.textInteractionFlags() | Qt.TextSelectableByMouse)
+            label.setTextInteractionFlags(label.textInteractionFlags() | Qt.TextInteractionFlag.TextSelectableByMouse)
         
         self.splitter.addWidget(self.metadata_widget)
         self.splitter.setStretchFactor(0, 2)

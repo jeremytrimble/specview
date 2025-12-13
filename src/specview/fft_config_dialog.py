@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QPushButton, QHBoxLayout
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QHBoxLayout
+from PyQt6.QtCore import Qt
 from pydantic import ValidationError
 from pyqtschema import WidgetBuilder
 
@@ -37,7 +37,7 @@ class FFTConfigDialog(QDialog):
         
         button_layout.addWidget(ok_button)
         button_layout.addWidget(cancel_button)
-        button_layout.setAlignment(Qt.AlignRight)
+        button_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
         
         layout.addLayout(button_layout)
         self.setLayout(layout)

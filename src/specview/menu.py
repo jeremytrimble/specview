@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QMenu, QMenuBar, QFileDialog
-from PyQt5.QtCore import QObject
-from PyQt5.QtWidgets import QApplication, QAction
+from PyQt6.QtWidgets import QMenu, QMenuBar, QFileDialog
+from PyQt6.QtCore import QObject
+from PyQt6.QtWidgets import QApplication, QAction
 from pathlib import Path
 
 from .about_dialog import AboutDialog

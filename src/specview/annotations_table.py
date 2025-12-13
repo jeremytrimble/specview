@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel, QModelIndex
+from PyQt6.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel, QModelIndex
 from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout, QMenu, QMessageBox
 
 from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
@@ -122,17 +122,17 @@ class AnnotationsModel(QAbstractTableModel):
         return self._NUM_COLUMNS
 
     def headerData(self, section, orientation, role):
-        if role == Qt.DisplayRole:
-            if orientation == Qt.Horizontal:
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
                 return self._column_names[section]
 
     def flags(self, index):
         base_flags = super().flags(index)
         if index.column() in self._editable_columns:
-            flags = base_flags | Qt.ItemIsEditable
+            flags = base_flags | Qt.ItemFlag.ItemIsEditable
             # Make the visible column checkable
             if index.column() == 0:
-                flags |= Qt.ItemIsUserCheckable
+                flags |= Qt.ItemFlag.ItemIsUserCheckable
             return flags
         return base_flags
 
@@ -160,7 +160,7 @@ class AnnotationsModel(QAbstractTableModel):
         if row < 0 or row >= len(self._annotation_id_list) or col < 0 or col >= self._NUM_COLUMNS:
             return None
         
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             if col == 0:
                 # Visible column - don't show text, just checkbox
                 return ""
@@ -211,12 +211,12 @@ class AnnotationsModel(QAbstractTableModel):
             elif col == 9:
                 return "TODO"   # put more here
         
-        elif role == Qt.CheckStateRole:
+        elif role == Qt.ItemDataRole.CheckStateRole:
             # Only handle checkbox for the visible column
             if col == 0:
-                return Qt.Checked if annotation.visible else Qt.Unchecked
+                return Qt.CheckState.Checked if annotation.visible else Qt.CheckState.Unchecked
         
-        elif role == Qt.UserRole:
+        elif role == Qt.ItemDataRole.UserRole:
             # Return raw comparable values for sorting
             if col == 0:
                 # Visible - return boolean for sorting
@@ -256,7 +256,7 @@ class AnnotationsModel(QAbstractTableModel):
                 # More Info - return string
                 return "TODO"
 
-    def setData(self, index, value, role=Qt.EditRole):
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
         # Handle checkbox state changes
         
         row = index.row()
@@ -265,18 +265,18 @@ class AnnotationsModel(QAbstractTableModel):
         if annotation_dict is None:
             return False
 
-        if role == Qt.CheckStateRole:
+        if role == Qt.ItemDataRole.CheckStateRole:
             if index.column() == 0:  # Visible column
 
                 # Set visibility based on checkbox state
-                annotation_dict.visible = (value == Qt.Checked)
+                annotation_dict.visible = (value == Qt.CheckState.Checked)
                 
                 # Emit dataChanged signal to update the view
                 self.dataChanged.emit(index, index)
                 return True
             return False
         
-        if role != Qt.EditRole:
+        if role != Qt.ItemDataRole.EditRole:
             return False
 
         col = index.column()
@@ -364,7 +364,7 @@ class AnnotationsTable(QWidget):
         # Create and configure custom proxy model for sorting
         self.proxy_model = AnnotationsSortFilterProxyModel(self)
         self.proxy_model.setSourceModel(self.model)
-        self.proxy_model.setSortRole(Qt.UserRole)
+        self.proxy_model.setSortRole(Qt.ItemDataRole.UserRole)
         self.proxy_model.setDynamicSortFilter(True)
 
         self.table.setModel(self.proxy_model)
@@ -373,7 +373,7 @@ class AnnotationsTable(QWidget):
         self.table.setSortingEnabled(True)
         
         # Enable context menu
-        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._on_context_menu)
         
         self.layout = QHBoxLayout()

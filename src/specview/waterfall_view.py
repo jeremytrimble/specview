@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QPointF, QRectF, QObject, QRunnable, QThread, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QApplication, QWidget, QHBoxLayout
+from PyQt6.QtCore import QPointF, QRectF, QObject, QRunnable, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout
 import pyqtgraph as pg
 import numpy as np
 

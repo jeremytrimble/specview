@@ -21,7 +21,7 @@ log = logging.getLogger("chunkwise_compute")
 
 from scipy.signal import ShortTimeFFT
 import threading
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble", ensure_exists=True)) / "ccache"
 

@@ -10,7 +10,7 @@ from specview.app_state import AppState
 @pytest.fixture(scope="module")
 def qtapplication():
     """Fixture to initialize a Qt application for testing."""
-    from PyQt5.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication
 
     app = QApplication.instance()
     yield app

@@ -1,7 +1,7 @@
 """Tests for annotations table sorting functionality."""
 import pytest
-from PyQt5.QtCore import Qt, QThreadPool, QModelIndex
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtCore import Qt, QThreadPool, QModelIndex
+from PyQt6.QtWidgets import QApplication
 import numpy as np
 from pathlib import Path
 from sigmf import SigMFFile
