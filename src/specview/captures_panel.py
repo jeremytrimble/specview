@@ -187,7 +187,7 @@ class CapturesPanel(QWidget):
             read_only=True,
             title=f"Global SigMF Metadata - {loaded_file.sigmf_data_file_path.name}"
         )
-        dialog.exec_()
+        dialog.exec()
 
     def _update_save_status_icon_in_panel(self, loaded_file: LoadedFile | None):
         """Set the save/unsaved icon for the provided loaded file.
@@ -325,7 +325,7 @@ class CapturesPanel(QWidget):
             read_only=True,
             title=f"Capture Metadata - {capture.parent_loadedfile.sigmf_data_file_path.name} - Capture {capture.capture_idx_in_file:02d}"
         )
-        dialog.exec_()
+        dialog.exec()
 
     def _on_file_save_status_changed(self, file_id:FileID, is_saved:bool) -> None:
         """Update file display when annotations change (to show unsaved indicator)."""

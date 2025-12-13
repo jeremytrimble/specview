@@ -1,0 +1,3 @@
+[console_scripts]
+sigmf_convert_wav = sigmf.apps.convert_wav:main [apps]
+sigmf_validate = sigmf.validate:main

@@ -1,5 +1,5 @@
 from PyQt6.QtCore import QAbstractTableModel, Qt, QSortFilterProxyModel, QModelIndex
-from PyQt5.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout, QMenu, QMessageBox
+from PyQt6.QtWidgets import QTableWidget, QTableWidgetItem, QTableView, QWidget, QApplication, QHBoxLayout, QMenu, QMessageBox
 
 from .loaded_file_mgmt import LoadedAnnotationDict, LoadedDictAction, AnnotationID, CaptureID
 from .json_editor_dialog import JSONEditorDialog
@@ -503,7 +503,7 @@ class AnnotationsTable(QWidget):
             title=f"Annotation JSON - {label}"
         )
         
-        if dialog.exec_():
+        if dialog.exec():
             # User clicked OK, update the annotation with the edited data
             edited_data = dialog.get_json()
             if edited_data is not None:
