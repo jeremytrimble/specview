@@ -50,5 +50,10 @@ dist/
 !.gitignore
 !.github
 
+# Python virtual environments
+venv/
+env/
+.venv/
+
 # generated version info file
 src/specview/version_info.json
