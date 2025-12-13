@@ -8,7 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     
     steps:
     - uses: actions/checkout@v4
@@ -18,14 +22,21 @@ jobs:
       with:
         python-version: "3.12"
     
-    - name: Install Qt dependencies
+    - name: Install Qt dependencies (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
         sudo apt-get install -y qt5-qmake qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools libqt5gui5
 
-    - name: Install uv
+    - name: Install uv (Unix)
+      if: runner.os != 'Windows'
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    - name: Install uv (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
     - name: Install dependencies
       run: |
@@ -34,6 +45,6 @@ jobs:
         
     - name: Run tests with pytest
       env:
-        QT_QPA_PLATFORM: offscreen
+        QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'offscreen' || '' }}
       run: |
         uv run pytest tests/
