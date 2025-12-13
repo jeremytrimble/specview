@@ -2,8 +2,11 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
-    "python_full_version >= '3.12'",
-    "python_full_version < '3.12'",
+    "platform_machine != 'ARM64' or sys_platform != 'win32'",
+    "platform_machine == 'ARM64' and sys_platform == 'win32'",
+]
+required-markers = [
+    "platform_machine == 'ARM64' and sys_platform == 'win32'",
 ]
 
 [[package]]
@@ -452,11 +455,26 @@ wheels = [
 
 [[package]]
 name = "pyqt5"
+version = "5.15.2"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "platform_machine == 'ARM64' and sys_platform == 'win32'",
+]
+dependencies = [
+    { name = "pyqt5-sip", marker = "platform_machine == 'ARM64' and sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/6c/640e3f5c734c296a7193079a86842a789edb7988dca39eab44579088a1d1/PyQt5-5.15.2.tar.gz", hash = "sha256:372b08dc9321d1201e4690182697c5e7ffb2e0770e6b4a45519025134b12e4fc", size = 3265445, upload-time = "2020-11-24T10:34:39.87Z" }
+
+[[package]]
+name = "pyqt5"
 version = "5.15.11"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "platform_machine != 'ARM64' or sys_platform != 'win32'",
+]
 dependencies = [
-    { name = "pyqt5-qt5" },
-    { name = "pyqt5-sip" },
+    { name = "pyqt5-qt5", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
+    { name = "pyqt5-sip", marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0e/07/c9ed0bd428df6f87183fca565a79fee19fa7c88c7f00a7f011ab4379e77a/PyQt5-5.15.11.tar.gz", hash = "sha256:fda45743ebb4a27b4b1a51c6d8ef455c4c1b5d610c90d2934c7802b5c1557c52", size = 3216775, upload-time = "2024-07-19T08:39:57.756Z" }
 wheels = [
@@ -515,7 +533,8 @@ version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonschema" },
-    { name = "pyqt5" },
+    { name = "pyqt5", version = "5.15.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'ARM64' and sys_platform == 'win32'" },
+    { name = "pyqt5", version = "5.15.11", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
     { name = "qtpy" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/14/49/970b7aadb05a5573863238f7d8d7c06210cbe8bd560c3de81a6e9776c6eb/pyqtschema-0.2.0.tar.gz", hash = "sha256:103cbb257f5c6a77d003b22ae773645a6b9908b084e07062e74ba27ad00250be", size = 15127, upload-time = "2023-05-05T21:16:58.835Z" }
@@ -780,7 +799,8 @@ dependencies = [
     { name = "numpy" },
     { name = "platformdirs" },
     { name = "pydantic" },
-    { name = "pyqt5" },
+    { name = "pyqt5", version = "5.15.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'ARM64' and sys_platform == 'win32'" },
+    { name = "pyqt5", version = "5.15.11", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'ARM64' or sys_platform != 'win32'" },
     { name = "pyqtgraph" },
     { name = "pyqtschema" },
     { name = "scipy" },
@@ -805,7 +825,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.1" },
     { name = "platformdirs", specifier = ">=4.3.8" },
     { name = "pydantic", specifier = ">=2.11.7" },
-    { name = "pyqt5", specifier = ">=5.15.11" },
+    { name = "pyqt5", specifier = ">=5.15.0" },
     { name = "pyqtgraph", specifier = ">=0.13.7" },
     { name = "pyqtschema", specifier = ">=0.2.0" },
     { name = "scipy", specifier = ">=1.16.0" },

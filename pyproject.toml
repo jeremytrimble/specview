@@ -8,7 +8,7 @@ dependencies = [
     "numpy>=2.3.1",
     "platformdirs>=4.3.8",
     "pydantic>=2.11.7",
-    "pyqt5>=5.15.11",
+    "pyqt5>=5.15.0",        # TODO: what version to depend on here?
     "pyqtgraph>=0.13.7",
     "pyqtschema>=0.2.0",
     "scipy>=1.16.0",
@@ -35,6 +35,11 @@ specview = { workspace = true }
 addopts = "--cov=src/specview --cov-report=term --cov-report=html"
 testpaths = [
     "tests"
+]
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'ARM64'",
 ]
 
 # Declare a build backend so that uv sync --group dev causes specview to be installed editably
