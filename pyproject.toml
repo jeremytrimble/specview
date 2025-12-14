@@ -5,12 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "jsonschema>=4.24.0",
     "numpy>=2.3.1",
     "platformdirs>=4.3.8",
     "pydantic>=2.11.7",
     "pyqt6>=6.7.0",
     "pyqtgraph>=0.13.7",
-    "pyqtschema>=0.2.0",
+    "qtpy>=2.4.3",
     "scipy>=1.16.0",
     "sigmf>=1.2.10",
 ]
@@ -30,6 +31,7 @@ dev = [
 
 [tool.uv.sources]
 specview = { workspace = true }
+pyqtschema = { workspace = true }
 
 [tool.pytest.ini_options]
 addopts = "--cov=src/specview --cov-report=term --cov-report=html"
@@ -37,9 +39,12 @@ testpaths = [
     "tests"
 ]
 
-# Declare a build backend so that uv sync --group dev causes specview to be installed editably
 [build-system]
-requires = ["uv_build>=0.9.4,<0.10.0"]
-build-backend = "uv_build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+specview = "src/specview"
+pyqtschema = "subs/pyqtschema/src/pyqtschema"
 
 # TODO: make the build backend generate the version info for a wheel file
