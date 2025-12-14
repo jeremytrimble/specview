@@ -29,6 +29,10 @@ dev = [
     "pytest-qt>=4.5.0",
 ]
 
+[project.gui-scripts]
+specview = "specview.main:main"
+
+
 [tool.uv.sources]
 specview = { workspace = true }
 pyqtschema = { workspace = true }
