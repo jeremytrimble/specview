@@ -27,6 +27,8 @@ dev = [
     "pytest-cov>=7.0.0",
     "specview",
     "pytest-qt>=4.5.0",
+    "poethepoet>=0.31.1",
+    "ruff>=0.8.4",
 ]
 
 [project.gui-scripts]
@@ -52,3 +54,12 @@ specview = "src/specview"
 pyqtschema = "subs/pyqtschema/src/pyqtschema"
 
 # TODO: make the build backend generate the version info for a wheel file
+
+[tool.poe.tasks]
+test = "pytest tests/"
+build-wheel = "uv build"
+build-pyinstaller = "pyinstaller --clean specview.spec"
+build = ["build-wheel", "build-pyinstaller"]
+clean = "rm -rf dist build"
+format = "ruff format ."
+format-check = "ruff format --check ."
