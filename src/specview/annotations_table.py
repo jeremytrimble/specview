@@ -128,12 +128,12 @@ class AnnotationsModel(QAbstractTableModel):
 
     def flags(self, index):
         base_flags = super().flags(index)
+        # Handle the visible column (checkbox) specially
+        if index.column() == 0:
+            return base_flags | Qt.ItemFlag.ItemIsUserCheckable
+        # Handle other editable columns
         if index.column() in self._editable_columns:
-            flags = base_flags | Qt.ItemFlag.ItemIsEditable
-            # Make the visible column checkable
-            if index.column() == 0:
-                flags |= Qt.ItemFlag.ItemIsUserCheckable
-            return flags
+            return base_flags | Qt.ItemFlag.ItemIsEditable
         return base_flags
 
     def _get_annotation_id_and_dict_for_row_idx(self, index:int):
@@ -267,12 +267,16 @@ class AnnotationsModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.CheckStateRole:
             if index.column() == 0:  # Visible column
-
                 # Set visibility based on checkbox state
-                annotation_dict.visible = (value == Qt.CheckState.Checked)
+                # In Qt6, value can be int or Qt.CheckState
+                if isinstance(value, int):
+                    new_visible = (value == Qt.CheckState.Checked.value)
+                else:
+                    new_visible = (value == Qt.CheckState.Checked)
+                annotation_dict.visible = new_visible
                 
-                # Emit dataChanged signal to update the view
-                self.dataChanged.emit(index, index)
+                # Emit dataChanged signal to update the view, specifying the CheckStateRole
+                self.dataChanged.emit(index, index, [Qt.ItemDataRole.CheckStateRole])
                 return True
             return False
         
