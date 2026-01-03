@@ -60,6 +60,6 @@ test = "pytest tests/"
 build-wheel = "uv build"
 build-pyinstaller = "pyinstaller --clean specview.spec"
 build = ["build-wheel", "build-pyinstaller"]
-clean = "rm -rf dist build"
+clean.script = "poethepoet.scripts:rm('dist/', 'build/')"
 format = "ruff format ."
 format-check = "ruff format --check ."
