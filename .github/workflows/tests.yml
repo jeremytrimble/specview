@@ -68,9 +68,9 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        uv run pytest tests/
+        uv run poe test
         
     - name: Run tests with pytest (macOS/Windows)
       if: runner.os != 'Linux'
       run: |
-        uv run pytest tests/
+        uv run poe test
