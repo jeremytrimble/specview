@@ -33,6 +33,7 @@ jobs:
 
       - name: Build with PyInstaller
         run: |
+          uv sync --group build --group dev
           uv run poe build-pyinstaller
 
       - name: Upload executable artifact
