@@ -13,7 +13,10 @@ sigmf_data_files = [
 
 a = Analysis(
     ['outer_main.py'],
-    pathex=[],
+    pathex=[
+        'src', 
+        'subs/pyqtschema/src',      # need to include this because we vendor/subtree pyqtschema
+    ],
     binaries=[],
     datas= sigmf_data_files,
     hiddenimports=[],
