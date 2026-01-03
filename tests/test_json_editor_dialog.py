@@ -1,6 +1,6 @@
 import sys
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 from specview.json_editor_dialog import JSONEditorDialog
 
 def main():
@@ -30,7 +30,7 @@ def main():
         read_only=True,
         title="Read-only JSON Viewer"
     )
-    read_only_dialog.exec_()
+    read_only_dialog.exec()
 
     # Then show an editable dialog
     editable_dialog = JSONEditorDialog(
@@ -39,7 +39,7 @@ def main():
         title="Editable JSON Editor"
     )
     
-    if editable_dialog.exec_() == JSONEditorDialog.Accepted:
+    if editable_dialog.exec() == JSONEditorDialog.DialogCode.Accepted:
         edited_data = editable_dialog.get_json()
         if edited_data is not None:
             print("Edited JSON data:")

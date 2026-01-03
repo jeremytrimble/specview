@@ -8,7 +8,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest, windows-11-arm]
     
     steps:
     - uses: actions/checkout@v4
@@ -18,22 +22,55 @@ jobs:
       with:
         python-version: "3.12"
     
-    - name: Install Qt dependencies
+    - name: Install Qt dependencies (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y qt5-qmake qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools libqt5gui5
+        sudo apt-get install -y qt6-base-dev libqt6gui6t64 libgl1 libegl1 libxkbcommon-x11-0
 
-    - name: Install uv
+    - name: Install Qt dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install qt@6
+
+    - name: Install Qt dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        # Qt6 will be installed via pip package on Windows
+        echo "Qt6 will be installed with PyQt6 package"
+
+    - name: Install uv (Unix)
+      if: runner.os != 'Windows'
       run: |
         curl -LsSf https://astral.sh/uv/install.sh | sh
 
-    - name: Install dependencies
+    - name: Install uv (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        irm https://astral.sh/uv/install.ps1 | iex
+      shell: powershell
+
+    - name: Install dependencies (Unix)
+      if: runner.os != 'Windows'
       run: |
         uv venv
         uv pip install -e .
         
-    - name: Run tests with pytest
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        uv venv
+        uv pip install -e .
+      shell: bash
+        
+    - name: Run tests with pytest (Linux)
+      if: runner.os == 'Linux'
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        uv run pytest tests/
+        uv run poe test
+        
+    - name: Run tests with pytest (macOS/Windows)
+      if: runner.os != 'Linux'
+      run: |
+        uv run poe test

@@ -59,9 +59,9 @@ import numpy as np
 from pathlib import Path
 from typing import Any, Iterator
 from sigmf import SigMFFile
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QSettings, QThreadPool, QTimer, QEventLoop
-from PyQt5.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QSettings, QThreadPool, QTimer, QEventLoop
+from PyQt6.QtTest import QTest
 import time
 
 from specview.main import MainWindow

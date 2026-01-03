@@ -1,6 +1,6 @@
-from PyQt5.QtWidgets import QMenu, QMenuBar, QFileDialog
-from PyQt5.QtCore import QObject
-from PyQt5.QtWidgets import QApplication, QAction
+from PyQt6.QtWidgets import QMenu, QMenuBar, QFileDialog, QApplication
+from PyQt6.QtCore import QObject
+from PyQt6.QtGui import QAction
 from pathlib import Path
 
 from .about_dialog import AboutDialog
@@ -325,7 +325,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     # Add FFT settings action
     fft_settings_action = QAction(text="FFT Settings...", parent=parent)
     fft_settings_action.setShortcut("Ctrl+F")
-    fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec_())
+    fft_settings_action.triggered.connect(lambda: FFTConfigDialog(QApplication.instance().app_state, parent).exec())
     analysis_menu.addAction(fft_settings_action)
 
     analysis_menu.addSeparator()
@@ -342,7 +342,7 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     analysis_menu.addAction(decrease_fft_action)
 
     help_menu = QMenu("&Help", menu_bar)
-    help_menu.addAction("&About", lambda: AboutDialog(parent).exec_())
+    help_menu.addAction("&About", lambda: AboutDialog(parent).exec())
 
     menu_bar.addMenu(file_menu)
     menu_bar.addMenu(view_menu)

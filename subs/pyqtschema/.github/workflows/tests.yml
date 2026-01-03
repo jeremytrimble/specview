@@ -1,0 +1,45 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        #python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+        python-version: ['3.10', '3.14']
+        qt-impl: ['PyQt5', 'PySide5', 'PyQt6', 'PySide6']
+        #os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest]
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Qt5 dependencies (Linux)
+      if: runner.os == 'Linux' && contains(matrix.qt-impl, '5')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qtbase5-dev libqt5gui5 libgl1 libegl1 libxkbcommon-x11-0
+
+    - name: Install Qt6 dependencies (Linux)
+      if: runner.os == 'Linux' && contains(matrix.qt-impl, '6')
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qt6-base-dev libqt6gui6t64 libgl1 libegl1 libxkbcommon-x11-0
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+    
+    - name: Install dependencies
+      run: uv sync --dev --python ${{ matrix.python-version }}
+
+    - name: Install a QT implementation
+      run: uv pip install ${{ matrix.qt-impl }} 
+
+    - name: Run tests
+      run: uv run pytest tests/

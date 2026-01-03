@@ -9,7 +9,7 @@ import sigmf
 #from sigmf.sigmffile import dtype_info as sigmf_dtype_info
 from .sigmf_util import get_annotation_time_bound_relative_to_current_capture, sigmf_type_to_numpy_dtype
 from .monotonic_axis import MonotonicAxis
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 
 from .chunkwise_compute import (
     TimeDomainChunkwiseComputedArray,

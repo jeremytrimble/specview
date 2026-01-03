@@ -1,5 +1,5 @@
 from typing import Any, Optional, Union
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QPlainTextEdit,
@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import (
     QLabel,
     QWidget,
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QTextCharFormat, QColor, QSyntaxHighlighter, QTextDocument
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QTextCharFormat, QColor, QSyntaxHighlighter, QTextDocument
 import json
 
 class JSONSyntaxHighlighter(QSyntaxHighlighter):

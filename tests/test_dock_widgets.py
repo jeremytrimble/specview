@@ -1,7 +1,7 @@
 """Tests for dock widget functionality."""
 import pytest
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtCore import QSettings, QThreadPool
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QSettings, QThreadPool
 from specview.main import MainWindow
 from specview.app_state import AppState
 from specview.ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION

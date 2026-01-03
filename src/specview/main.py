@@ -1,5 +1,5 @@
-from PyQt5.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QThreadPool, QSettings
-from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QDockWidget  # tested with PyQt6==6.7.0
+from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QThreadPool, QSettings
+from PyQt6.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QDockWidget
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
 import signal # TODO: let control-C actually close the app
@@ -91,24 +91,24 @@ class MainWindow(QMainWindow):
         dock = QDockWidget(title, self)
         dock.setObjectName(title.replace(" ", ""))  # Set object name for state saving
         dock.setWidget(widget)
-        dock.setAllowedAreas(Qt.AllDockWidgetAreas)
-        dock.setFeatures(QDockWidget.DockWidgetMovable | 
-                        QDockWidget.DockWidgetFloatable | 
-                        QDockWidget.DockWidgetClosable)
+        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        dock.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetMovable | 
+                        QDockWidget.DockWidgetFeature.DockWidgetFloatable | 
+                        QDockWidget.DockWidgetFeature.DockWidgetClosable)
         return dock
 
     def _setup_default_layout(self):
         """Set up the default dock widget layout."""
         # Add docks to main window in default positions
-        self.addDockWidget(Qt.TopDockWidgetArea, self.time_dock, Qt.Vertical)
-        self.addDockWidget(Qt.TopDockWidgetArea, self.specan_dock, Qt.Vertical)
-        self.addDockWidget(Qt.TopDockWidgetArea, self.waterfall_dock, Qt.Vertical)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.time_dock, Qt.Orientation.Vertical)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.specan_dock, Qt.Orientation.Vertical)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.waterfall_dock, Qt.Orientation.Vertical)
 
-        self.addDockWidget(Qt.TopDockWidgetArea, self.captures_dock, Qt.Vertical)
-        self.addDockWidget(Qt.TopDockWidgetArea, self.annotation_dock, Qt.Vertical)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.captures_dock, Qt.Orientation.Vertical)
+        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.annotation_dock, Qt.Orientation.Vertical)
         self.tabifyDockWidget(self.captures_dock, self.annotation_dock)
 
-        self.resizeDocks([self.time_dock, self.specan_dock, self.waterfall_dock, self.captures_dock, self.annotation_dock], [1, 1, 2, 1,1], Qt.Vertical)
+        self.resizeDocks([self.time_dock, self.specan_dock, self.waterfall_dock, self.captures_dock, self.annotation_dock], [1, 1, 2, 1,1], Qt.Orientation.Vertical)
         
     def _load_window_state(self):
         """Load window geometry and dock widget state from settings."""

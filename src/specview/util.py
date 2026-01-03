@@ -7,7 +7,7 @@ from contextlib import contextmanager
 #from functools import partial
 import typing
 
-from PyQt5.QtWidgets import QWidget
+from PyQt6.QtWidgets import QWidget
 
 import pyqtgraph as pg
 import functools
@@ -80,21 +80,22 @@ def duration_format(seconds: float) -> str:
     elif np.isneginf(seconds):
         return "-∞"
 
-    if seconds < 1.0:
-        val, unit_str = unit_value_to_prefixed_units(seconds, "s")
-        if val == 0.0:
-            return "0.0s"
-        return f"{val:.1f}{unit_str}"
-
     prefix = ""
     if seconds < 0:
         prefix = "-"
         seconds = -seconds 
-    
-    minutes = int(seconds // 60)
-    hours =   int(minutes // 60)
-    seconds = seconds % 60
-    
+
+    if seconds < 1.0:
+        val, unit_str = unit_value_to_prefixed_units(seconds, "s")
+        if val == 0.0:
+            return "0.0s"
+        return f"{prefix}{val:.1f}{unit_str}"
+
+    hours, rem = divmod(seconds, 3600)
+    minutes, seconds = divmod(rem, 60)
+    hours = int(hours)
+    minutes = int(minutes)
+
     out = prefix
     if hours > 0:
         out+=f"{hours:d}h"

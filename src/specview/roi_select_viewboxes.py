@@ -1,6 +1,6 @@
 import pyqtgraph as pg
-from PyQt5.QtCore import QPointF, Qt
-from PyQt5.QtWidgets import QGraphicsSceneMouseEvent
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QGraphicsSceneMouseEvent
 
 import typing
 
