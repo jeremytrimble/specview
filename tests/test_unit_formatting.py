@@ -39,7 +39,14 @@ def test_duration_format():
     assert duration_format(123e-9) ==  "123.0ns"
     assert duration_format(123e-12) == "123.0ps"
 
+    assert duration_format(-123e-12) == "-123.0ps"
+
     assert duration_format(999e-3) == "999.0ms"
+
+    assert duration_format( 59*60 + 59.999) == "59m59.999s"
+    assert duration_format( -(59*60 + 59.999)) == "-59m59.999s"
+
+    assert duration_format( 1*3600 + 2*60 + 3.456) == "1h02m03.456s"
 
 
 def test_parse_unit_prefix():
