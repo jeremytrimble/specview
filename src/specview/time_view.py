@@ -10,6 +10,7 @@ from .roi_select_viewboxes import IntervalSelectViewBox
 from .ui_constants import INTERVAL_ROI_COLOR
 from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
+from .util import duration_format, freq_format
 import threading
 
 from .chunkwise_compute import ChunkwiseComputedArray
@@ -51,7 +52,7 @@ class TimeView(QWidget):
         self.setLayout(layout)
 
         roiPen = pg.mkPen( pg.mkColor(INTERVAL_ROI_COLOR), width=3)
-        self._interval_roi = pg.LinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen)
+        self._interval_roi = LabeledLinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen, label_fill_color=(0, 0, 255, 128))
         self._interval_roi.setVisible(False)
         self._time_plot.addItem(self._interval_roi, ignoreBounds=True)
 
@@ -60,6 +61,7 @@ class TimeView(QWidget):
 
         # make sure the interval ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
         self._interval_roi.sigRegionChanged.connect( lambda: self._time_interval_set(self._interval_roi.getRegion()) )
+        self._interval_roi.sigRegionChanged.connect( self._update_time_interval_roi_label )
 
         # Initialize the annotation ROI manager for linear ROIs
         def roi_factory(**kwargs):
@@ -79,6 +81,42 @@ class TimeView(QWidget):
 
     def _time_interval_set(self, interval: tuple[float,float]|None):
         self._get_app_state().set_time_interval(interval)
+    
+    def _update_time_interval_roi_label(self):
+        """Update the interval ROI label with time and sample information."""
+        if self._selected_capture_id is None:
+            return
+        
+        region = self._interval_roi.getRegion()
+        start_time_sec, end_time_sec = region
+        duration_sec = end_time_sec - start_time_sec
+        
+        app_state = self._get_app_state()
+        capture = app_state.get_capture_by_id(self._selected_capture_id)
+        if capture is None:
+            return
+        
+        sample_rate_Hz = capture.parent_loadedfile.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
+        if sample_rate_Hz is None or sample_rate_Hz <= 0:
+            return
+        
+        # Calculate sample indices
+        start_sample = int(start_time_sec * sample_rate_Hz)
+        end_sample = int(end_time_sec * sample_rate_Hz)
+        num_samples = end_sample - start_sample
+        
+        # Format the label text
+        label_lines = [
+            f"Start: {duration_format(start_time_sec)}",
+            f"End: {duration_format(end_time_sec)}",
+            f"Duration: {duration_format(duration_sec)}",
+            f"Samples: {start_sample:,} to {end_sample:,}",
+            f"Length: {num_samples:,} samples",
+            f"1/T: {freq_format(1.0 / duration_sec) if duration_sec > 0 else float('inf')}",
+        ]
+        
+        label_text = "\n".join(label_lines)
+        self._interval_roi.setLabel(label_text)
 
     def _connect_app_signals(self):
         app_state = self._get_app_state()
@@ -86,6 +124,7 @@ class TimeView(QWidget):
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
         app_state.annotation_changed.connect(self._on_annotation_changed)
+        app_state.time_view_seek_to_time_requested.connect(self.seek_to_time)
         # TODO: process selected channel changes
         #app_state.selected_channel_changed.connect(self._on_selected_channel_changed)
 
@@ -123,6 +162,7 @@ class TimeView(QWidget):
         self._interval_roi.setVisible(self._time_interval is not None)
         if self._time_interval is not None:
             self._interval_roi.setRegion(self._time_interval)
+            self._update_time_interval_roi_label()
 
         # TODO: try to zoom to the selected time interval?
         #if self._time_interval is not None:
@@ -200,6 +240,22 @@ class TimeView(QWidget):
 
         #self._time_plot.setXRange(time_sec_axis.min(), time_sec_axis.max())
         #self._time_plot.setYRange(-1.1, 1.1)  # reasonable default for normalized data, TODO: make this based on data extents later?
+
+    def seek_to_time(self, time_sec: float):
+        """Seek to a specific time in seconds by centering the view on it."""
+        if self._selected_capture_id is None:
+            return
+        
+        # Get current view range to determine how much to show around the target time
+        x_range, y_range = self._time_plot.viewRange()
+        current_width = x_range[1] - x_range[0]
+        
+        # Center the view on the target time
+        half_width = current_width / 2.0
+        new_x_min = time_sec - half_width
+        new_x_max = time_sec + half_width
+        
+        self._time_plot.setXRange(new_x_min, new_x_max, padding=0)
 
     def _update_displayed_data(self, x_min_sec:float, x_max_sec:float):
 

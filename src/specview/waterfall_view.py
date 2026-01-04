@@ -113,6 +113,7 @@ class WaterfallView(QWidget):
 
         app_state.annotation_changed.connect(self._on_annotation_changed)
         app_state.fft_config_changed.connect(self._on_fft_config_changed)
+        app_state.waterfall_view_seek_to_time_requested.connect(self.seek_to_time)
 
     def _on_selected_capture_changed(self, capture_id: CaptureID):
         self._current_capture_id = capture_id
@@ -209,6 +210,22 @@ class WaterfallView(QWidget):
 
     def _on_cursor_frequency_changed(self, f_Hz: float):
         self._freq_crosshair_x.setPos(f_Hz)
+
+    def seek_to_time(self, time_sec: float):
+        """Seek to a specific time in seconds by centering the view on it."""
+        if self._current_capture_id is None:
+            return
+        
+        # Get current view range to determine how much to show around the target time
+        x_range, y_range = self._waterfall.viewRange()
+        current_height = y_range[1] - y_range[0]
+        
+        # Center the view on the target time (time is on Y axis for waterfall)
+        half_height = current_height / 2.0
+        new_y_min = time_sec - half_height
+        new_y_max = time_sec + half_height
+        
+        self._waterfall.setYRange(new_y_min, new_y_max, padding=0)
 
     def _on_scene_mouse_moved(self, pos: QPointF):
         if self._waterfall.sceneBoundingRect().contains(pos):

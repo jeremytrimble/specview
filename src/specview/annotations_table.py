@@ -136,7 +136,7 @@ class AnnotationsModel(QAbstractTableModel):
             return base_flags | Qt.ItemFlag.ItemIsEditable
         return base_flags
 
-    def _get_annotation_id_and_dict_for_row_idx(self, index:int):
+    def _get_annotation_id_and_dict_for_row_idx(self, index:int) -> tuple[AnnotationID|None, LoadedAnnotationDict|None]:
         if index < 0 or index >= len(self._annotation_id_list):
             return None, None
 
@@ -388,6 +388,12 @@ class AnnotationsTable(QWidget):
         self._current_sort_column = -1
         self._current_sort_order = Qt.AscendingOrder
         
+        # Track which column was last clicked for seeking behavior
+        self._last_clicked_column = -1
+        
+        # Flag to prevent recursion when syncing selection
+        self._updating_selection = False
+        
         # Connect header click to custom handler
         header = self.table.horizontalHeader()
         header.sectionClicked.connect(self._on_header_clicked)
@@ -395,12 +401,26 @@ class AnnotationsTable(QWidget):
         self.model.layoutChanged.connect(self.table.resizeColumnsToContents)
 
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
+        
+        # Connect to table clicks to track which column was clicked
+        self.table.clicked.connect(self._on_cell_clicked)
+        
+        # Connect to AppState signal to sync selection from external changes
+        app_state = self._get_app_state()
+        app_state.selected_annotation_changed.connect(self._on_annotation_selection_changed_externally)
 
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
+    
+    def _on_cell_clicked(self, index):
+        """Track which column was clicked for seeking behavior."""
+        self._last_clicked_column = index.column()
 
     def _on_selection_changed(self, selected, deselected):
         """Handle selection changes in the table."""
+        if self._updating_selection:
+            return
+            
         app_state = self._get_app_state()
         indexes = self.table.selectionModel().selectedIndexes()
         if not indexes:
@@ -413,8 +433,34 @@ class AnnotationsTable(QWidget):
         # Map proxy index to source model index
         source_index = self.proxy_model.mapToSource(first_index)
         
-        annotation_id, _ = self.model._get_annotation_id_and_dict_for_row_idx(source_index.row()) 
+        annotation_id, annotation_dict = self.model._get_annotation_id_and_dict_for_row_idx(source_index.row()) 
         app_state.set_selected_annotation(annotation_id)
+    def _on_annotation_selection_changed_externally(self, annotation_id: AnnotationID|None):
+        """Handle annotation selection changes from external sources (e.g., clicking labels in plots)."""
+        if self._updating_selection:
+            return
+        
+        self._updating_selection = True
+        try:
+            if annotation_id is None:
+                self.table.clearSelection()
+                return
+            
+            # Find the row for this annotation_id
+            for row_idx in range(len(self.model._annotation_id_list)):
+                if self.model._annotation_id_list[row_idx] == annotation_id:
+                    # Map source row to proxy row
+                    source_index = self.model.index(row_idx, 0)
+                    proxy_index = self.proxy_model.mapFromSource(source_index)
+                    
+                    if proxy_index.isValid():
+                        # Select the entire row
+                        self.table.selectRow(proxy_index.row())
+                        # Scroll to make it visible
+                        self.table.scrollTo(proxy_index)
+                    break
+        finally:
+            self._updating_selection = False
 
     def _on_header_clicked(self, logical_index):
         """Handle header clicks to toggle sort order or visibility."""
@@ -476,6 +522,8 @@ class AnnotationsTable(QWidget):
         source_index = self.proxy_model.mapToSource(index)
         
         menu = QMenu(self)
+        goto_start_time_action = menu.addAction("Go to Start Time")
+        goto_end_time_action = menu.addAction("Go to End Time")
         view_json_action = menu.addAction("View/Edit Annotation JSON")
         delete_action = menu.addAction("Delete Annotation")
         
@@ -485,10 +533,33 @@ class AnnotationsTable(QWidget):
             self._view_edit_annotation_json(source_index.row())
         elif action == delete_action:
             self._delete_annotation(source_index.row())
+        elif action == goto_start_time_action:
+            self._goto_annotation_time(source_index.row(), to_start=True)
+        elif action == goto_end_time_action:
+            self._goto_annotation_time(source_index.row(), to_start=False)
+
+    def _goto_annotation_time(self, row, to_start: bool):
+        """Seek to the annotation's start or end time."""
+        _, annotation = self.model._get_annotation_id_and_dict_for_row_idx(row)
+        if annotation is None:
+            return
+
+        app_state = self._get_app_state()
+        capture_id = app_state._selected_capture
+        if capture_id is None:
+            return
+
+        if to_start:
+            time_sec = annotation.get_start_time_sec(capture_id)
+        else:
+            time_sec = annotation.get_end_time_sec(capture_id)
+
+        if time_sec is not None:
+            app_state.time_view_seek_to_time(time_sec)
+            app_state.waterfall_view_seek_to_time(time_sec)
     
     def _view_edit_annotation_json(self, row):
         """Open a dialog to view and edit the annotation's raw JSON."""
-
 
         _, annotation = self.model._get_annotation_id_and_dict_for_row_idx(row)
         if annotation is None:

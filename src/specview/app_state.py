@@ -82,6 +82,10 @@ class AppState(QObject):
 
     annotation_changed = pyqtSignal([AnnotationID,LoadedDictAction], name='annotation_changed')
     recent_files_changed = pyqtSignal([], name='recent_files_changed')
+    
+    # Signal to request views to seek to a specific time
+    time_view_seek_to_time_requested = pyqtSignal(float, name='time_view_seek_to_time_requested')  # emitted with time in seconds
+    waterfall_view_seek_to_time_requested = pyqtSignal(float, name='waterfall_view_seek_to_time_requested')  # emitted with time in seconds
 
     # Maximum number of recent files to track
     MAX_RECENT_FILES = 10
@@ -200,6 +204,13 @@ class AppState(QObject):
 
         self.selected_annotation_changed.emit( self._selected_annotation )
 
+    def time_view_seek_to_time(self, time_sec: float):
+        """Request time view to seek to a specific time in seconds."""
+        self.time_view_seek_to_time_requested.emit(time_sec)
+    
+    def waterfall_view_seek_to_time(self, time_sec: float):
+        """Request waterfall view to seek to a specific time in seconds."""
+        self.waterfall_view_seek_to_time_requested.emit(time_sec)
 
     def get_recent_files(self) -> list[str]:
         """Get the list of recent files."""

@@ -138,6 +138,12 @@ class AnnotationROIManager(Generic[ROIType]):
         if annotation_id is not None and annotation_id in self._annotation_rois:
             aroi = self._annotation_rois[annotation_id]
             aroi.roi.setColors( text_color=(255, 255, 255), fill_color=SELECTED_ANNOTATION_ROI_COLOR)
+    
+    def _on_label_clicked(self, annotation_id: AnnotationID):
+        """Handle label clicks to select the annotation."""
+        log.debug(f"Label clicked for annotation {annotation_id}")
+        app_state = self._get_app_state()
+        app_state.set_selected_annotation(annotation_id)
 
     def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id: AnnotationID):
         """Create or update an annotation ROI based on the annotation ID."""
@@ -171,9 +177,12 @@ class AnnotationROIManager(Generic[ROIType]):
                     size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
                     label_text_color=(255, 255, 255),
                     label_fill_color=ANNOTATION_ROI_COLOR,
+                    sideScalers=True,
                 )
                 self._plot_widget.addItem(roi, ignoreBounds=True)
                 roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
+                # Connect label click
+                roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
                 aroi = AnnotationROI(ad.annotation_id, roi)
                 self._annotation_rois[ad.annotation_id] = aroi
             else:
@@ -200,6 +209,8 @@ class AnnotationROIManager(Generic[ROIType]):
                 )
                 self._plot_widget.addItem(roi, ignoreBounds=True)
                 roi.sigRegionChanged.connect(lambda: self._on_linear_roi_changed(annotation_id))
+                # Connect label click
+                roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
                 aroi = AnnotationROI(ad.annotation_id, roi)
                 self._annotation_rois[ad.annotation_id] = aroi
             else:

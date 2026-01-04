@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .about_dialog import AboutDialog
 from .fft_config_dialog import FFTConfigDialog
+from .goto_time_dialog import GotoTimeDialog
 from .app_state import AppState
 
 import logging
@@ -165,6 +166,26 @@ def toggle_all_annotations() -> None:
     else:
         hide_all_annotations()
 
+def show_goto_time_dialog(parent) -> None:
+    """
+    Show the Go to Time dialog and seek all plots to the specified time.
+    """
+    app_state: AppState = QApplication.instance().app_state
+    
+    # Check if a capture is selected
+    if app_state._selected_capture is None:
+        log.warning("No capture selected. Cannot go to time.")
+        return
+    
+    dialog = GotoTimeDialog(parent)
+    if dialog.exec():
+        time_sec = dialog.get_time()
+        if time_sec is not None:
+            # Seek all views to the specified time via AppState
+            app_state.time_view_seek_to_time(time_sec)
+            app_state.waterfall_view_seek_to_time(time_sec)
+            log.info(f"Seeking to time: {time_sec:.3f} seconds")
+
 def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     """
     Example Populate the menubar with the necessary menus and actions.
@@ -319,6 +340,14 @@ def populate_menubar(menu_bar: QMenuBar, parent:QObject):
     reset_layout_action = QAction(text="Reset Layout", parent=parent)
     reset_layout_action.triggered.connect(parent.reset_layout)
     view_menu.addAction(reset_layout_action)
+    
+    view_menu.addSeparator()
+    
+    # Add Go to Time action
+    goto_time_action = QAction(text="Go to Time...", parent=parent)
+    goto_time_action.setShortcut("Ctrl+G")
+    goto_time_action.triggered.connect(lambda: show_goto_time_dialog(parent))
+    view_menu.addAction(goto_time_action)
 
     analysis_menu = QMenu("A&nalysis", menu_bar)
 

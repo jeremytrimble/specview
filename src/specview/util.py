@@ -16,6 +16,13 @@ import numpy as np
 log = logging.getLogger("util")
 
 def unit_value_to_prefixed_units(unity_value: float, unit_base:str) -> tuple[float, str]:
+
+    if unity_value < 0.0:
+        flip_sign = True
+        unity_value = -unity_value
+    else:
+        flip_sign = False
+
     if unity_value >= 1e12:
         prefix = "T"
         value = unity_value / 1e12
@@ -48,6 +55,8 @@ def unit_value_to_prefixed_units(unity_value: float, unit_base:str) -> tuple[flo
         value = unity_value * 1e15  # femto
     else:
         return 0.0, unit_base  # If the value is too small, return 0 with the base unit
+    if flip_sign:
+        value = -value
     return value, prefix + unit_base
 
 def freq_format_with_units(frequency: float) -> tuple[float, str]:
