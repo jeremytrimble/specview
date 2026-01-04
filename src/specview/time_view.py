@@ -112,7 +112,7 @@ class TimeView(QWidget):
             f"Duration: {duration_format(duration_sec)}",
             f"Samples: {start_sample:,} to {end_sample:,}",
             f"Length: {num_samples:,} samples",
-            f"1/T: {freq_format(1.0 / duration_sec)}",
+            f"1/T: {freq_format(1.0 / duration_sec) if duration_sec > 0 else float('inf')}",
         ]
         
         label_text = "\n".join(label_lines)
