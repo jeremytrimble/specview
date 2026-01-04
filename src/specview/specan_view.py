@@ -12,6 +12,7 @@ from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 from .app_state import AppState, CaptureID, AnnotationID
 from .loaded_file_mgmt import LoadedCaptureDict, LoadedDictAction
+from .util import freq_format
 
 from .chunkwise_compute import (
     FrequencyDomainChunkwiseComputedArray,
@@ -53,7 +54,7 @@ class SpecanView(QWidget):
         self._freq_interval: tuple[float,float]|None = None
 
         roiPen = pg.mkPen( pg.mkColor(INTERVAL_ROI_COLOR), width=3)
-        self._interval_roi = pg.LinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen)
+        self._interval_roi = LabeledLinearRegionItem( values=(0,1), orientation="vertical", pen=roiPen, label_fill_color=(0, 0, 255, 128))
         self._interval_roi.setVisible(False)
         self._freq_plot.addItem(self._interval_roi, ignoreBounds=True)
 
@@ -62,6 +63,7 @@ class SpecanView(QWidget):
 
         # make sure the interval ROI is updated when the user drags it (in addition to during initial creation with shift-drag)
         self._interval_roi.sigRegionChanged.connect( lambda: self._freq_interval_set_from_specan(self._interval_roi.getRegion()) )
+        self._interval_roi.sigRegionChanged.connect( self._update_freq_interval_roi_label )
 
         # Initialize the annotation ROI manager for linear ROIs in frequency domain
         def roi_factory(**kwargs):
@@ -101,12 +103,48 @@ class SpecanView(QWidget):
 
     def _freq_interval_set_from_specan(self, freq_interval: tuple[float,float]|None):
         self._get_app_state().set_frequency_interval(freq_interval)
+    
+    def _update_freq_interval_roi_label(self):
+        """Update the interval ROI label with frequency information."""
+        if self._selected_capture_id is None:
+            return
+        
+        region = self._interval_roi.getRegion()
+        freq_lo_Hz, freq_hi_Hz = region
+        bandwidth_Hz = freq_hi_Hz - freq_lo_Hz
+        center_freq_Hz = (freq_lo_Hz + freq_hi_Hz) / 2.0
+        
+        app_state = self._get_app_state()
+        capture = app_state.get_capture_by_id(self._selected_capture_id)
+        if capture is None:
+            return
+        
+        # Get the capture's center frequency
+        capture_center_freq_Hz = capture.center_freq_Hz
+        
+        # Calculate relative frequency (for complex signals, this can be positive or negative)
+        relative_freq_Hz = center_freq_Hz - capture_center_freq_Hz
+
+        log.critical(f"{relative_freq_Hz=}, {center_freq_Hz=}, {capture_center_freq_Hz=}    ")
+
+        # Format the label text
+        label_lines = [
+            f"Lower: {freq_format(freq_lo_Hz)}",
+            f"Center: {freq_format(center_freq_Hz)}",
+            f"Upper: {freq_format(freq_hi_Hz)}",
+            f"Bandwidth: {freq_format(bandwidth_Hz)}",
+            f"Rel. to center: {freq_format(relative_freq_Hz)}"
+        ]
+        
+        label_text = "\n".join(label_lines)
+        self._interval_roi.setLabel(label_text)
 
     def _on_freq_interval_changed_from_outside(self, freq_interval: tuple[float,float]|None):
         self._freq_interval = freq_interval
         self._interval_roi.setVisible(self._freq_interval is not None)
         if self._freq_interval is not None:
             self._interval_roi.setRegion(self._freq_interval)
+            self._update_freq_interval_roi_label()
 
     def _on_time_interval_changed_from_outside(self, time_interval: tuple[float,float]|None):
         self._time_interval = time_interval

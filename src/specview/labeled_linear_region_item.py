@@ -11,7 +11,7 @@ class LabeledLinearRegionItem(pg.LinearRegionItem):
     def __init__(self, *args, **kwargs):
         label_text = kwargs.pop('label_text', "")
         label_text_color = kwargs.pop('label_text_color', (255, 255, 80))
-        label_fill_color = kwargs.pop('label_fill_color', (0, 0, 255))
+        label_fill_color = kwargs.pop('label_fill_color', (0, 0, 255, 128))
         super().__init__(*args, **kwargs)
         self.label_text = label_text
         self.label_color = label_text_color
