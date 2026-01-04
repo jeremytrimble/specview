@@ -125,8 +125,6 @@ class SpecanView(QWidget):
         # Calculate relative frequency (for complex signals, this can be positive or negative)
         relative_freq_Hz = center_freq_Hz - capture_center_freq_Hz
 
-        log.critical(f"{relative_freq_Hz=}, {center_freq_Hz=}, {capture_center_freq_Hz=}    ")
-
         # Format the label text
         label_lines = [
             f"Lower: {freq_format(freq_lo_Hz)}",
