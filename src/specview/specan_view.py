@@ -33,6 +33,7 @@ class SpecanView(QWidget):
         self._selected_capture_id: CaptureID|None = None
         self._chunk_holder = ChunkHolder()
         self._chunk_holder.held_data_updated.connect( self._redisplay )
+        self._chunk_holder.averaged_trace_ready.connect( self._on_averaged_trace_ready )
 
         self._freq_plot = pg.PlotWidget(labels={'left': 'PSD', 'bottom': 'Frequency [Hz]'}, viewBox=myvb)
         self._freq_plot.setMouseEnabled(x=True, y=True)
@@ -166,6 +167,10 @@ class SpecanView(QWidget):
             self._freq_crosshair_x.setPos( freq_Hz )
 
             self._get_app_state().set_cursor_frequency(freq_Hz)
+    
+    def _on_averaged_trace_ready(self, trace: npt.NDArray, freq_axis: MonotonicAxis):
+        """Called when background averaging completes. Trigger a redisplay."""
+        self._redisplay()
 
     def _redisplay(self):
 
@@ -201,21 +206,16 @@ class SpecanView(QWidget):
         else:
             t_lo_sec, t_hi_sec = self._time_interval
 
-            rv = self._chunk_holder.get_data_for(
+            rv = self._chunk_holder.get_averaged_trace_for(
                 capture_id=self._selected_capture_id,
                 channel=chan,
-                time_relto_capture=t_lo_sec,
-                duration_sec=t_hi_sec - t_lo_sec,
+                time_interval=(t_lo_sec, t_hi_sec),
             )
             if rv is None:
-                # data not yet available, but chunkholder has started a background load and will re-call us when ready
+                # averaged trace not yet available, background computation in progress
                 return
 
-            arr, freq_axis = rv
-
-            arr = np.power(10, (arr/20.0))
-            trace = arr.mean(axis=0, out=arr[0,:])
-            trace = 20 * np.log10(trace)
+            trace, freq_axis = rv
 
         self._freq_plot_curve.setData(
             x = freq_axis.array,
@@ -245,6 +245,7 @@ class SpecanView(QWidget):
 class ChunkHolder(QObject):
 
     held_data_updated = pyqtSignal()
+    averaged_trace_ready = pyqtSignal(object, object, name="averaged_trace_ready")  # (trace, freq_axis)
 
     """
     Caches a chunk of data from a ChunkwiseComputedArray to avoid repeated reads when the user is scrolling nearby.
@@ -260,10 +261,17 @@ class ChunkHolder(QObject):
         self._array_delta_t_per_frame: float = 0.0
         self._array_freq_axis_Hz: MonotonicAxis | None = None
 
+        self._averaged_trace: npt.NDArray | None = None
+        self._averaged_trace_capture_id: CaptureID | None = None
+        self._averaged_trace_channel: int | None = None
+        self._averaged_trace_time_interval: tuple[float, float] | None = None
+
         self._data_update_in_progress: SpecanViewUpdaterWorker | None = None
+        self._averaging_in_progress: SpecanAveragingWorker | None = None
     
     def clear_saved_data(self):
         self._array = None
+        self._averaged_trace = None
 
     def get_data_for(self, capture_id: CaptureID, channel:int, time_relto_capture:float, duration_sec:float|None=None) -> tuple[npt.NDArray, MonotonicAxis]|None:
 
@@ -343,6 +351,48 @@ class ChunkHolder(QObject):
 
         self.held_data_updated.emit()
 
+    def get_averaged_trace_for(self, capture_id: CaptureID, channel: int, time_interval: tuple[float, float]) -> tuple[npt.NDArray, MonotonicAxis] | None:
+        """Get an averaged trace over a time interval. Returns cached result or starts background computation."""
+        t_lo, t_hi = time_interval
+        
+        # Check if we have a cached averaged trace for this exact request
+        if (self._averaged_trace is not None and 
+            self._averaged_trace_capture_id == capture_id and 
+            self._averaged_trace_channel == channel and
+            self._averaged_trace_time_interval == time_interval):
+            return self._averaged_trace, self._array_freq_axis_Hz
+        
+        # Need to compute the average. First, get the raw data.
+        rv = self.get_data_for(capture_id, channel, t_lo, duration_sec=t_hi - t_lo)
+        if rv is None:
+            # Raw data not available yet, background load in progress
+            return None
+        
+        arr, freq_axis = rv
+        
+        # Check if we already have an averaging worker running
+        if self._averaging_in_progress is not None:
+            self._averaging_in_progress.canceled.set()
+            self._averaging_in_progress = None
+        
+        # Start background averaging
+        worker = SpecanAveragingWorker(arr, freq_axis, capture_id, channel, time_interval)
+        self._averaging_in_progress = worker
+        worker.signals.averaged_trace_ready.connect(self._on_averaged_trace_ready)
+        QApplication.instance().thread_pool.start(worker)
+        
+        return None
+    
+    def _on_averaged_trace_ready(self, trace: npt.NDArray, freq_axis: MonotonicAxis, capture_id: CaptureID, channel: int, time_interval: tuple[float, float]):
+        """Handle completion of background averaging."""
+        self._averaged_trace = trace
+        self._averaged_trace_capture_id = capture_id
+        self._averaged_trace_channel = channel
+        self._averaged_trace_time_interval = time_interval
+        self._averaging_in_progress = None
+
+        self.averaged_trace_ready.emit(trace, freq_axis)
+
 class SpecanViewUpdaterSignals(QObject):
     update_data_signal = pyqtSignal((
         np.ndarray, float, int, CaptureID, float, MonotonicAxis
@@ -384,3 +434,35 @@ class SpecanViewUpdaterWorker(QRunnable):
                 )
         except:
             log.exception("Error in SpecanViewUpdaterWorker")
+
+class SpecanAveragingSignals(QObject):
+    averaged_trace_ready = pyqtSignal(object,object, str, int, tuple, name="averaged_trace_ready")  # (trace, freq_axis, capture_id, channel, time_interval)
+
+class SpecanAveragingWorker(QRunnable):
+    """Background worker to compute time-averaged spectrum trace."""
+    def __init__(self, array_data: npt.NDArray, freq_axis: MonotonicAxis, capture_id: CaptureID, channel: int, time_interval: tuple[float, float]):
+        super().__init__()
+        self._array_data = array_data
+        self._freq_axis = freq_axis
+        self._capture_id = capture_id
+        self._channel = channel
+        self._time_interval = time_interval
+        
+        self.signals = SpecanAveragingSignals()
+        self.canceled = threading.Event()
+    
+    def run(self):
+        try:
+            # Perform the averaging computation in the background thread
+            # Convert from dB to linear, average, then convert back to dB
+
+            arr = np.power(10, (self._array_data / 20.0))
+            trace = arr.mean(axis=0)
+            trace = 20 * np.log10(trace)
+            
+            if not self.canceled.is_set():
+                self.signals.averaged_trace_ready.emit(
+                    trace, self._freq_axis, self._capture_id, self._channel, self._time_interval
+                )
+        except:
+            log.exception("Error in SpecanAveragingWorker")
