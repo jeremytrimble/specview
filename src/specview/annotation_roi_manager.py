@@ -177,6 +177,7 @@ class AnnotationROIManager(Generic[ROIType]):
                     size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
                     label_text_color=(255, 255, 255),
                     label_fill_color=ANNOTATION_ROI_COLOR,
+                    sideScalers=True,
                 )
                 self._plot_widget.addItem(roi, ignoreBounds=True)
                 roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
