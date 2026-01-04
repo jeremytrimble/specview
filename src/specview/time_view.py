@@ -86,6 +86,7 @@ class TimeView(QWidget):
         app_state.time_interval_changed.connect(self._on_time_interval_changed_from_outside)
         app_state.selected_capture_changed.connect(self._on_selected_capture_changed)
         app_state.annotation_changed.connect(self._on_annotation_changed)
+        app_state.time_view_seek_to_time_requested.connect(self.seek_to_time)
         # TODO: process selected channel changes
         #app_state.selected_channel_changed.connect(self._on_selected_channel_changed)
 
@@ -200,6 +201,22 @@ class TimeView(QWidget):
 
         #self._time_plot.setXRange(time_sec_axis.min(), time_sec_axis.max())
         #self._time_plot.setYRange(-1.1, 1.1)  # reasonable default for normalized data, TODO: make this based on data extents later?
+
+    def seek_to_time(self, time_sec: float):
+        """Seek to a specific time in seconds by centering the view on it."""
+        if self._selected_capture_id is None:
+            return
+        
+        # Get current view range to determine how much to show around the target time
+        x_range, y_range = self._time_plot.viewRange()
+        current_width = x_range[1] - x_range[0]
+        
+        # Center the view on the target time
+        half_width = current_width / 2.0
+        new_x_min = time_sec - half_width
+        new_x_max = time_sec + half_width
+        
+        self._time_plot.setXRange(new_x_min, new_x_max, padding=0)
 
     def _update_displayed_data(self, x_min_sec:float, x_max_sec:float):
 
