@@ -10,6 +10,11 @@ import numpy as np
 from pathlib import Path
 from sigmf import SigMFFile
 from specview.loaded_file_mgmt import LoadedFilesCollection
+from specview.chunkwise_compute import (
+    RawTimeDomainComputationSpec,
+    FrequencyDomainComputationSpec,
+    FFTLength,
+)
 
 
 # All 20 supported SigMF data types
@@ -253,6 +258,34 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype):
     # Verify sample count
     sample_count = loaded_file.sigmf_file.sample_count
     assert sample_count == 10000, f"Sample count mismatch for {sigmf_dtype}: expected 10000, got {sample_count}"
+    
+    # Exercise time-domain chunkwise computed array
+    time_cca = loaded_file.get_time_chunkwise_computed_array(comp_spec=RawTimeDomainComputationSpec())
+    assert time_cca is not None, f"Failed to get time chunkwise computed array for {sigmf_dtype}"
+    
+    # Get shape and dtype
+    time_shape, time_dtype = time_cca.get_shape_and_dtype()
+    assert time_shape[0] == 10000, f"Time array shape mismatch for {sigmf_dtype}: expected 10000 samples, got {time_shape[0]}"
+    
+    # Request a small range of data (blocking)
+    time_data = time_cca.get_range_blocking(0, 100)
+    assert time_data is not None, f"Failed to get time data for {sigmf_dtype}"
+    assert time_data.shape[0] == 100, f"Time data shape mismatch for {sigmf_dtype}"
+    
+    # Exercise frequency-domain chunkwise computed array
+    freq_comp_spec = FrequencyDomainComputationSpec(NFFT=FFTLength.N256)
+    freq_cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=0, comp_spec=freq_comp_spec)
+    assert freq_cca is not None, f"Failed to get frequency chunkwise computed array for {sigmf_dtype}"
+    
+    # Get shape and dtype
+    freq_shape, freq_dtype = freq_cca.get_shape_and_dtype()
+    assert freq_shape[1] == 256, f"Frequency array shape mismatch for {sigmf_dtype}: expected 256 frequency bins, got {freq_shape[1]}"
+    assert freq_dtype == np.float32, f"Frequency array dtype mismatch for {sigmf_dtype}"
+    
+    # Request a small range of frequency data (blocking)
+    freq_data = freq_cca.get_range_blocking(0, 10)
+    assert freq_data is not None, f"Failed to get frequency data for {sigmf_dtype}"
+    assert freq_data.shape == (10, 256), f"Frequency data shape mismatch for {sigmf_dtype}: expected (10, 256), got {freq_data.shape}"
 
 
 def test_all_sigmf_formats_count():
