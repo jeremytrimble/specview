@@ -9,7 +9,7 @@ from enum import Enum, IntEnum
 import abc
 from dataclasses import dataclass
 from multiprocessing import cpu_count
-from multiprocessing.pool import Pool, AsyncResult
+from multiprocessing.pool import MapResult, Pool
 import struct
 import logging
 from pydantic import BaseModel, Field
@@ -132,7 +132,7 @@ class ProcessingPoolManager:
     def _pool_error_handler(self, e: Exception) -> None:
         log.exception(f"Error in processing pool: {e}")
 
-    def map_async_with_callback(self, func, args_list, callback) -> AsyncResult:
+    def map_async_with_callback(self, func, args_list, callback) -> MapResult:
         """
         Runs `func` on each item in `args_list` in the processing pool.
         When all are complete, `callback` is called with the list of results.
@@ -310,8 +310,8 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         if chunks_not_yet_computed:
             ppm = self._processing_pool_manager
-            pool = ppm.get_pool()
-            async_result: AsyncResult | None = None
+            assert ppm is not None
+            map_result: MapResult | None = None
             with self._cbc_cond:
                 chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
                 if chunks_to_compute:
@@ -319,13 +319,13 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
                     # perform the computation in the parallel process pool.
                     # once it has completed successfully, we can read the data from the memmap
                     start_time = time.monotonic()
-                    async_result = pool.map_async(self._perform_chunk_computation, requests)
+                    map_result = ppm.map_async_with_callback(self._perform_chunk_computation, requests, callback=None)
                     self._chunks_being_computed.update(chunks_to_compute)
-            if async_result is not None:
-                async_result.wait()
+            if map_result is not None:
+                map_result.wait()
                 end_time = time.monotonic()
-                if not async_result.successful():
-                    raise RuntimeError("Error during chunk computation") from async_result.value()
+                if not map_result.successful():
+                    raise RuntimeError("Error during chunk computation") from map_result.get()
                 self._chunk_bitmap.set_chunks(chunks_to_compute)
                 log.debug(f"TimeDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
             self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
@@ -371,6 +371,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             log.debug(f"Computing {len(chunks_to_compute)} chunks for range {start}-{stop}")
             requests = [self._generate_chunk_computation_request(ci) for ci in chunks_to_compute]
             ppm = self._processing_pool_manager
+            assert ppm is not None
             ppm.map_async_with_callback(self._perform_chunk_computation, requests, on_computation_complete)
         else:
             log.debug(f"All chunks already computed for range {start}-{stop}, invoking callback directly")
@@ -598,8 +599,8 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         if chunks_not_yet_computed:
             ppm = self._processing_pool_manager
-            pool = ppm.get_pool()
-            async_result: AsyncResult | None = None
+            assert ppm is not None
+            map_result: MapResult | None = None
             with self._cbc_cond:
                 chunks_to_compute = chunks_not_yet_computed - self._chunks_being_computed
                 if chunks_to_compute:
@@ -607,13 +608,13 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
                     # perform the computation in the parallel process pool.
                     # once it has completed successfully, we can read the data from the memmap
                     start_time = time.monotonic()
-                    async_result: AsyncResult = pool.map_async(self._perform_chunk_computation, requests)
+                    map_result = ppm.map_async_with_callback(self._perform_chunk_computation, requests, callback=None)
                     self._chunks_being_computed.update(chunks_to_compute)
-            if async_result is not None:
-                async_result.wait()
+            if map_result is not None:
+                map_result.wait()
                 end_time = time.monotonic()
-                if not async_result.successful():
-                    raise RuntimeError("Error during chunk computation") from async_result.value()
+                if not map_result.successful():
+                    raise RuntimeError("Error during chunk computation") from map_result.get()
                 self._chunk_bitmap.set_chunks(chunks_to_compute)
                 log.debug(f"FreqDomainCCA.get_range_blocking: Computed {len(chunks_to_compute)} chunks for range {start}-{stop} in {end_time - start_time:.2f} seconds")
             self._chunk_bitmap.wait_for_bits_set( chunks_i_need )   # TODO: use timeout here?
