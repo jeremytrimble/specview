@@ -167,18 +167,18 @@ def generate_test_data(sigmf_dtype: str, num_samples: int = 1000) -> np.ndarray:
                 return np.random.randint(-max_val, max_val, num_samples, dtype=np_dtype)
 
 
-def create_sigmf_file(tmpdir, sigmf_dtype: str) -> Path:
+def create_sigmf_file(tmpdir, sigmf_dtype: str, num_samples:int) -> Path:
     """
     Create a SigMF file with the specified data type.
     
     Args:
         tmpdir: Pytest temporary directory fixture
         sigmf_dtype: SigMF data type string
+        num_samples: Number of samples to generate
     
     Returns:
         Path to the created .sigmf-meta file
     """
-    num_samples = 10000
     
     # Generate test data
     data = generate_test_data(sigmf_dtype, num_samples)
@@ -210,7 +210,9 @@ def create_sigmf_file(tmpdir, sigmf_dtype: str) -> Path:
 
 
 @pytest.mark.parametrize("sigmf_dtype", SIGMF_DATA_TYPES)
-def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype):
+@pytest.mark.parametrize("nfft", [FFTLength.N256, FFTLength.N512, FFTLength.N1024])
+@pytest.mark.parametrize("sample_count", [10000, int(10e6)])
+def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype, nfft:FFTLength, sample_count:int):
     """
     Test generating and loading a SigMF file with a specific binary format.
     
@@ -221,7 +223,7 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype):
     4. Verifies that basic metadata is correctly preserved
     """
     # Create the SigMF file
-    meta_path = create_sigmf_file(tmpdir, sigmf_dtype)
+    meta_path = create_sigmf_file(tmpdir, sigmf_dtype, sample_count)
     
     # Verify files were created
     assert meta_path.exists(), f"Metadata file not created for {sigmf_dtype}"
@@ -256,8 +258,8 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype):
     assert frequency == 2.4e9, f"Frequency mismatch for {sigmf_dtype}"
     
     # Verify sample count
-    sample_count = loaded_file.sigmf_file.sample_count
-    assert sample_count == 10000, f"Sample count mismatch for {sigmf_dtype}: expected 10000, got {sample_count}"
+    read_sample_count = loaded_file.sigmf_file.sample_count
+    assert read_sample_count == sample_count, f"Sample count mismatch for {sigmf_dtype}: expected {sample_count}, got {read_sample_count}"
     
     # Exercise time-domain chunkwise computed array
     time_cca = loaded_file.get_time_chunkwise_computed_array(comp_spec=RawTimeDomainComputationSpec())
@@ -265,27 +267,45 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype):
     
     # Get shape and dtype
     time_shape, time_dtype = time_cca.get_shape_and_dtype()
-    assert time_shape[0] == 10000, f"Time array shape mismatch for {sigmf_dtype}: expected 10000 samples, got {time_shape[0]}"
+    assert time_shape[0] == sample_count, f"Time array shape mismatch for {sigmf_dtype}: expected {sample_count} samples, got {time_shape[0]}"
     
     # Request a small range of data (blocking)
     time_data = time_cca.get_range_blocking(0, 100)
     assert time_data is not None, f"Failed to get time data for {sigmf_dtype}"
     assert time_data.shape[0] == 100, f"Time data shape mismatch for {sigmf_dtype}"
+
+    # Request a the end of the time data
+    max_sample = time_shape[0]
+    start_sample = max(0, max_sample - 100)
+    time_data = time_cca.get_range_blocking(start_sample, max_sample)
+    assert time_data is not None, f"Failed to get time data for {sigmf_dtype}"
+    assert time_data.shape[0] == 100, f"Time data shape mismatch for {sigmf_dtype}"
+
     
     # Exercise frequency-domain chunkwise computed array
-    freq_comp_spec = FrequencyDomainComputationSpec(NFFT=FFTLength.N256)
+    freq_comp_spec = FrequencyDomainComputationSpec(NFFT=nfft)
+    int_nfft = int(nfft.value)
     freq_cca = loaded_file.get_freq_chunkwise_computed_array(selected_channel=0, comp_spec=freq_comp_spec)
     assert freq_cca is not None, f"Failed to get frequency chunkwise computed array for {sigmf_dtype}"
     
     # Get shape and dtype
     freq_shape, freq_dtype = freq_cca.get_shape_and_dtype()
-    assert freq_shape[1] == 256, f"Frequency array shape mismatch for {sigmf_dtype}: expected 256 frequency bins, got {freq_shape[1]}"
+    assert freq_shape[1] == int_nfft, f"Frequency array shape mismatch for {sigmf_dtype}: expected {int_nfft} frequency bins, got {freq_shape[1]}"
     assert freq_dtype == np.float32, f"Frequency array dtype mismatch for {sigmf_dtype}"
     
     # Request a small range of frequency data (blocking)
     freq_data = freq_cca.get_range_blocking(0, 10)
     assert freq_data is not None, f"Failed to get frequency data for {sigmf_dtype}"
-    assert freq_data.shape == (10, 256), f"Frequency data shape mismatch for {sigmf_dtype}: expected (10, 256), got {freq_data.shape}"
+    assert freq_data.shape == (10, int_nfft), f"Frequency data shape mismatch for {sigmf_dtype}: expected (10, {int_nfft}), got {freq_data.shape}"
+
+    # Request the end of the frequency data
+    max_frame = freq_shape[0]
+    start_frame = max(0, max_frame - 10)
+    print(f"Requesting last 10 frames of frequency data, which are: {start_frame} to {max_frame}")
+    freq_data = freq_cca.get_range_blocking(start_frame, max_frame)
+    assert freq_data is not None, f"Failed to get frequency data for {sigmf_dtype}"
+    assert freq_data.shape == (10, int_nfft), f"Frequency data shape mismatch for {sigmf_dtype}: expected (10, {int_nfft}), got {freq_data.shape}"
+
 
 
 def test_all_sigmf_formats_count():

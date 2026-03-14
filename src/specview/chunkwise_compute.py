@@ -19,28 +19,176 @@ import time
 from specview.monotonic_axis import MonotonicAxis
 log = logging.getLogger("chunkwise_compute")
 
-from scipy.signal import ShortTimeFFT
 import threading
 from PyQt6.QtWidgets import QApplication
+from .stft_window_calc import STFTWindowCalculator, InputSampleRange, FetchInputSamplesCallback
+from .sigmf_util import SigmfDataType
 
 chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble", ensure_exists=True)) / "ccache"
 
 RangeComputedCallback = typing.Callable[["ChunkwiseComputedArray", int, int, np.ndarray], None]
 
+def identity_xform(arr: np.ndarray) -> np.ndarray:
+    return arr
+
 class ChunkwiseComputedArray:
     # TODO: XXX this needs a better implementation that cannot hang the caller
     # turns out we need to load data from a QRunnable anyway so there is no need to be callback-based
     def get_range_blocking(self, start:int, stop:int) -> npt.NDArray|None:
+        """
+        Returns a view of the requested range.  This may block to allow
+        background computation of the requested range if it is not yet
+        available.
+        """
         raise NotImplementedError("Must be implemented in subclass")
 
+    # TODO: consider removing this method as we don't use it currently
     def get_range_callback(self, start: int, stop: int, cb: RangeComputedCallback) -> None:
+        """
+        Asynchronously computes the requested range and invokes the callback when done.
+        """
         raise NotImplementedError("Must be implemented in subclass")
 
     def get_shape_and_dtype(self) -> tuple[tuple[int, ...], np.dtype]:
+        """
+        Returns the shape and dtype of the computed array represented by this class.
+        The dtype will be either np.float32 or np.complex64, depending on the input file type.
+        """
         raise NotImplementedError("Must be implemented in subclass")
 
     def get_range_if_available(self, start:int, stop:int) -> npt.NDArray|None:
+        """
+        Immediately returns a view of the requested range if it is already
+        computed and available, or None if it is not yet computed.
+        """
         raise NotImplementedError("Must be implemented in subclass")
+
+    @staticmethod
+    def _get_input_data(signal_file:Path, sigmf_datatype:SigmfDataType, num_input_channels:int, start_sample:int, num_samples: int) -> np.ndarray:
+        """
+        Returns a (read-only) ndarray-like object containing the requested range
+        of samples from the input signal file with a dtype that is suitable for direct numpy use.
+
+        The shape will be (num_samples, num_input_channels).  The returned array
+        may be a memmap or a transformed view of a memmap, depending on the
+        input file type, but this should be transparent to the caller.  The
+        returned array will be read-only.
+        """
+
+        signal_file_size_bytes = signal_file.stat().st_size
+        total_num_input_samples = signal_file_size_bytes // (sigmf_datatype.sample_size_bytes * num_input_channels)
+
+        if total_num_input_samples * sigmf_datatype.sample_size_bytes * num_input_channels != signal_file_size_bytes:
+            log.warning(f"Signal file size {signal_file_size_bytes} is not a multiple of (samplesize={sigmf_datatype.sample_size_bytes} times num_input_channels={num_input_channels}).  Some samples may be truncated.")
+
+        byte_offset = start_sample * sigmf_datatype.sample_size_bytes * num_input_channels
+        map_length = num_samples * sigmf_datatype.sample_size_bytes * num_input_channels
+
+        if byte_offset + map_length > signal_file_size_bytes:
+            reduced_num_samples = (signal_file_size_bytes - byte_offset) // (sigmf_datatype.sample_size_bytes * num_input_channels)
+            if reduced_num_samples <= 0:
+                raise ValueError(f"Requested range exceeds signal file size: {byte_offset + map_length} > {signal_file_size_bytes}")
+            else:
+                log.warning(f"Requested range exceeds signal file size: {byte_offset + map_length} > {signal_file_size_bytes}.  Reducing num_samples from {num_samples} to {reduced_num_samples}.")
+                num_samples = reduced_num_samples
+
+        if sigmf_datatype in (SigmfDataType.cf32_le, SigmfDataType.cf32_be, SigmfDataType.cf64_le, SigmfDataType.cf64_be):
+            match sigmf_datatype:
+                case SigmfDataType.cf32_le:
+                    memmap_dtype = np.dtype('<c8')
+                case SigmfDataType.cf32_be:
+                    memmap_dtype = np.dtype('>c8')
+                case SigmfDataType.cf64_le:
+                    memmap_dtype = np.dtype('<c16')
+                case SigmfDataType.cf64_be:
+                    memmap_dtype = np.dtype('>c16')
+            xform = identity_xform
+            mmap_shape = (num_samples, num_input_channels)
+
+        elif not sigmf_datatype.is_complex:
+            # all of the real types are trivially memmappable, so we can just use the memmap directly
+            xform = identity_xform
+
+            # e: endianness
+            if sigmf_datatype.name.endswith('_le'):
+                e = '<'
+            elif sigmf_datatype.name.endswith('_be'):
+                e = '>'
+            else:
+                e = ''
+
+            # sz: size in bytes of the sample
+            if "64" in sigmf_datatype.name:
+                sz = '8'
+            elif "32" in sigmf_datatype.name:
+                sz = '4'
+            elif "16" in sigmf_datatype.name:
+                sz = '2'
+            elif "8" in sigmf_datatype.name:
+                sz = '1'
+            else:
+                raise ValueError(f"Unsupported SigMF datatype: {sigmf_datatype}")   # should be impossible
+            
+            # su: signed ("i") or unsigned ("u")
+            if "i" in sigmf_datatype.name:
+                su = 'i'
+            elif "u" in sigmf_datatype.name:
+                su = 'u'
+            elif "f" in sigmf_datatype.name:
+                su = 'f'
+            else:
+                raise ValueError(f"Unsupported SigMF datatype: {sigmf_datatype}")   # should be impossible
+
+            memmap_dtype = np.dtype(f"{e}{su}{sz}")
+            mmap_shape = (num_samples, num_input_channels)
+
+        else:
+            # complex integer types:  numpy doesn't support these innately so we use a transform function to convert the memmap to a usable numpy array
+            match sigmf_datatype:
+                case SigmfDataType.ci32_le:
+                    memmap_dtype = np.dtype('<i4')
+                case SigmfDataType.ci32_be:
+                    memmap_dtype = np.dtype('>i4')
+                case SigmfDataType.ci16_le:
+                    memmap_dtype = np.dtype('<i2')
+                case SigmfDataType.ci16_be:
+                    memmap_dtype = np.dtype('>i2')
+                case SigmfDataType.ci8:
+                    memmap_dtype = np.dtype('i1')
+                case SigmfDataType.cu32_le:
+                    memmap_dtype = np.dtype('<u4')
+                case SigmfDataType.cu32_be:
+                    memmap_dtype = np.dtype('>u4')
+                case SigmfDataType.cu16_le:
+                    memmap_dtype = np.dtype('<u2')
+                case SigmfDataType.cu16_be:
+                    memmap_dtype = np.dtype('>u2')
+                case SigmfDataType.cu8:
+                    memmap_dtype = np.dtype('u1')
+                case _:
+                    raise ValueError(f"Unsupported SigMF datatype: {sigmf_datatype}")   # should be impossible
+
+            # Note the order of operations: astype() actually turns ints into floats, then view() reinterprets the float array as complex.
+            def convert_components_to_complex_and_reshape(arr: np.ndarray) -> np.ndarray:
+                # convert to float32 and view as complex64
+                print(f"about to convert {arr.shape} of {arr.dtype} to complex64")
+                arr = arr.astype(np.float32).view(np.complex64)
+                # reshape to (num_samples, num_input_channels)
+                arr = arr.reshape((num_samples, num_input_channels))
+
+                # TODO now: apply scaling here!
+
+                return arr
+            xform = convert_components_to_complex_and_reshape
+            mmap_shape = (2*num_samples * num_input_channels,)
+
+        mm = np.memmap(signal_file, dtype=memmap_dtype, mode='r', offset=byte_offset, shape=mmap_shape)
+        a = xform(mm)   # apply transforms if necessary, which may create a separate array or a view of the memmap
+        a.setflags(write=False)  # make read-only
+        assert a.shape == (num_samples, num_input_channels), f"Unexpected shape: {a.shape} != {(num_samples, num_input_channels)}"
+
+        return a
+
 
 class CacheManager:
     def __init__(self, base_path: Path):
@@ -233,7 +381,7 @@ def compute_total_num_elements_in_shape(shape: tuple[int, ...]) -> int:
     return total    
 
 class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
-    def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_channels: int, comp_spec: TimeDomainComputationSpec, chunk_size_samples=1_000_000, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
+    def __init__(self, signal_file: Path, sigmf_datatype: SigmfDataType, num_channels: int, comp_spec: TimeDomainComputationSpec, chunk_size_samples=1_000_000, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
 
         if cache_manager is None:
             cache_manager = CacheManager.get_default_cache_manager()
@@ -243,20 +391,23 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             self._processing_pool_manager = ProcessingPoolManager.get_instance()
 
         self._signal_file = signal_file
-        self._signal_file_datatype = signal_file_datatype
+        self._sigmf_datatype = sigmf_datatype
         self._num_channels = num_channels
         self._chunk_size_samples = chunk_size_samples
         self._comp_spec = comp_spec
 
         # Note: we assume that axis 0 is the one that will be computed chunkwise
-        num_input_samples = self._signal_file.stat().st_size // (self._signal_file_datatype.itemsize * self._num_channels)
+        num_input_samples = self._signal_file.stat().st_size // (self._sigmf_datatype.sample_size_bytes * self._num_channels)
         self._input_shape = (num_input_samples, self._num_channels)
         self._output_shape = (num_input_samples, self._num_channels)
 
         if comp_spec.computation_type in (TimeDomainComputationType.REAL, TimeDomainComputationType.IMAG, TimeDomainComputationType.FM_DEMOD, TimeDomainComputationType.MAGNITUDE_DB): #, TimeDomainComputationType.AM_DEMOD):
             self._output_dtype = np.dtype(np.float32)
         elif comp_spec.computation_type in (TimeDomainComputationType.RAW,):
-            self._output_dtype = self._signal_file_datatype
+            if self._sigmf_datatype.is_complex:
+                self._output_dtype = np.dtype(np.complex64)
+            else:
+                self._output_dtype = np.dtype(np.float32)
         else:
             raise ValueError(f"Unsupported computation type: {comp_spec.computation_type}")
 
@@ -286,6 +437,11 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._output_memmap = np.memmap(self._output_file, dtype=self._output_dtype, mode='r', shape=self._output_shape)
 
     def get_shape_and_dtype(self) -> tuple[tuple[int, ...], np.dtype]:
+        """
+        Returns the shape and dtype of the computed array represented by this class.
+        The shape will be (num_samples, num_channels).
+        The dtype will be either np.float32 or np.complex64, depending on the input file type.
+        """
         return self._output_shape, self._output_dtype
 
     def map_sample_to_chunk(self, sample_index: int) -> int:
@@ -384,7 +540,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             "start_sample": start_sample,
             "end_sample": end_sample,
             "signal_file": str(self._signal_file),
-            "signal_file_datatype": str(self._signal_file_datatype),
+            "sigmf_datatype": self._sigmf_datatype.name,
             "num_channels": self._num_channels,
             "comp_spec": self._comp_spec,
             "output_file": str(self._output_file),
@@ -397,21 +553,20 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_sample = request["start_sample"]
         end_sample = request["end_sample"]
         signal_file = Path(request["signal_file"])
-        signal_file_datatype = np.dtype(request["signal_file_datatype"])
+        sigmf_datatype = SigmfDataType[request["sigmf_datatype"]]
         num_channels = request["num_channels"]
         comp_spec: TimeDomainComputationSpec = request["comp_spec"]
         output_file = Path(request["output_file"])
         output_dtype = np.dtype(request["output_dtype"])
 
-        num_input_samples = signal_file.stat().st_size // (int(signal_file_datatype.itemsize) * num_channels)
-        input_shape = (num_input_samples, num_channels)
+        num_input_samples = signal_file.stat().st_size // (sigmf_datatype.sample_size_bytes * num_channels)
 
         num_samples_to_read = end_sample - start_sample
 
-        # Use read-only memmap to access the input data
-        data = np.memmap(signal_file, dtype=signal_file_datatype, mode='r', 
-                        offset=start_sample * signal_file_datatype.itemsize * num_channels,
-                        shape=(num_samples_to_read, num_channels))
+        # For time domain computations, the input and output shapes are the
+        # same, so the start and end sample indices for the input are the same
+        # as for the output.
+        data = cls._get_input_data(signal_file, sigmf_datatype, num_channels, start_sample, num_samples_to_read)
 
         if comp_spec.computation_type == TimeDomainComputationType.RAW:
             output_data = data
@@ -487,27 +642,19 @@ class FrequencyDomainComputationSpec(BaseModel):
     def get_cache_tag_tuples(self) -> list[tuple[str, typing.Any]]:
         return [("NFFT", str(self.NFFT)), ("win", str(self.win)), ("hop", f"{self.hop.value:.3f}")]
 
-    def get_stft_object(self, fs: float) -> ShortTimeFFT:
-        # From scipy docs: The stft is represented by a complex-valued matrix
-        # S[q,p] where the p-th column represents an FFT with the window
-        # centered at the time t[p] = p * delta_t = p * hop * T where T is the
-        # sampling interval of the input signal. The q-th row represents the
-        # values at the frequency f[q] = q * delta_f with delta_f = 1 / (mfft *
-        # T) being the bin width of the FFT.
-        #
-        # S[q,p] = S[bin, frame]
-        return ShortTimeFFT(
-            win=window_type_to_array(self.win, int(self.NFFT)),
-            hop=self.hop_in_samples,
-            fs=fs,
-            fft_mode="centered",
-            scale_to="psd",
+    def get_stft_window_calculator(self, num_input_samples: int, sample_rate_Hz: float) -> STFTWindowCalculator:
+        return STFTWindowCalculator(
+            num_input_samples=num_input_samples,
+            sample_rate_Hz=sample_rate_Hz,
+            NFFT=self.NFFT,
+            win_length_samples = int(self.NFFT),
+            hop_samples = self.hop_in_samples,
         )
 
 DEFAULT_FREQ_COMPUTATION_SPEC = FrequencyDomainComputationSpec()
 
 class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
-    def __init__(self, signal_file: Path, signal_file_datatype: np.dtype, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_bins=128*1024, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
+    def __init__(self, signal_file: Path, sigmf_datatype: SigmfDataType, num_input_channels: int, target_output_channel:int, sample_rate_Hz:float, comp_spec: FrequencyDomainComputationSpec, chunk_size_bins=128*1024, cache_manager: CacheManager | None = None, processing_pool_manager:ProcessingPoolManager|None=None):
         if cache_manager is None:
             cache_manager = CacheManager.get_default_cache_manager()
 
@@ -516,7 +663,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             self._processing_pool_manager = ProcessingPoolManager.get_instance()
 
         self._signal_file = signal_file
-        self._signal_file_datatype = signal_file_datatype
+        self._sigmf_datatype = sigmf_datatype
         self._num_input_channels = num_input_channels
         self._target_output_channel = target_output_channel
         self._chunk_size_frames = max( 64, chunk_size_bins//comp_spec.NFFT )
@@ -524,16 +671,14 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._comp_spec = comp_spec
 
         # Note: we assume that axis 0 is the one that will be computed chunkwise
-        num_input_samples = self._signal_file.stat().st_size // (self._signal_file_datatype.itemsize * self._num_input_channels )
+        num_input_samples = self._signal_file.stat().st_size // (self._sigmf_datatype.sample_size_bytes * self._num_input_channels )
         self._input_shape = (num_input_samples, self._num_input_channels)
 
         # Note: we compute only a single output channel
-        self._stfft_obj = comp_spec.get_stft_object(self._input_sample_rate_Hz) 
-        num_output_frames = self._stfft_obj.p_num(num_input_samples)
-
-        # Note: can parameterize these by computation spec later if we need to vary parameters
-        self._output_shape = (num_output_frames, self._stfft_obj.mfft)
-        self._output_dtype = np.dtype(np.float32)
+        self._stft_win_calc = comp_spec.get_stft_window_calculator(num_input_samples, self._input_sample_rate_Hz)
+        num_output_frames = self._stft_win_calc.num_frames
+        self._output_shape = (num_output_frames, self._stft_win_calc.NFFT)
+        self._output_dtype = np.dtype(np.float32)   # Note: currently always float32 since we just compute magnitude
 
         self._num_output_chunks = compute_num_chunks(self._output_shape[0], self._chunk_size_frames)
 
@@ -552,7 +697,6 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         if not self._output_file.exists():
             # Create an empty file of the right size
             with open(self._output_file, 'wb') as f:
-                #os.ftruncate(f.fileno(), compute_total_num_elements_in_shape(self._output_shape) * self._output_dtype.itemsize)
                 f.seek( compute_total_num_elements_in_shape(self._output_shape) * self._output_dtype.itemsize - 1 )
                 f.write(b'\0')
                 f.flush()
@@ -560,15 +704,20 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         self._output_memmap = np.memmap(self._output_file, dtype=self._output_dtype, mode='r', shape=self._output_shape)
 
     def get_shape_and_dtype(self) -> tuple[tuple[int, ...], np.dtype]:
+        """
+        Returns the shape and dtype of the computed array represented by this class.
+        The shape will be (num_frames, num_bins).
+        The dtype will be np.float32 for the magnitude squared of the FFT (power spectral density).
+        """
         return self._output_shape, self._output_dtype
 
     def map_sample_to_chunk(self, sample_index: int) -> int:
         return sample_index // self._chunk_size_frames
 
     def map_chunk_to_frame_range(self, chunk_index: int) -> tuple[int, int]:
-        start_sample = chunk_index * self._chunk_size_frames
-        end_sample = min(start_sample + self._chunk_size_frames, self._output_shape[0])
-        return start_sample, end_sample
+        start_frame = chunk_index * self._chunk_size_frames
+        end_frame = min(start_frame + self._chunk_size_frames, self._output_shape[0])
+        return start_frame, end_frame
 
     def get_range_if_available(self, start:int, stop:int) -> npt.NDArray|None:
         """
@@ -670,7 +819,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             "start_frame": start_frame,
             "end_frame": end_frame,
             "signal_file": str(self._signal_file),
-            "signal_file_datatype": str(self._signal_file_datatype),
+            "sigmf_datatype": self._sigmf_datatype.name,
             "num_input_channels": self._num_input_channels,
             "target_output_channel": self._target_output_channel,
             "input_sample_rate_Hz": self._input_sample_rate_Hz,
@@ -694,7 +843,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         start_frame = request["start_frame"]
         end_frame = request["end_frame"]
         signal_file = Path(request["signal_file"])
-        signal_file_datatype = np.dtype(request["signal_file_datatype"])
+        sigmf_datatype = SigmfDataType[request["sigmf_datatype"]]
         num_input_channels = request["num_input_channels"]
         target_output_channel = request["target_output_channel"]
         input_sample_rate_Hz = request["input_sample_rate_Hz"]
@@ -703,20 +852,25 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         output_shape = request["output_shape"]
         output_dtype = np.dtype(request["output_dtype"])
 
-        num_input_samples = signal_file.stat().st_size // (int(signal_file_datatype.itemsize) * num_input_channels)
-        input_shape = (num_input_samples, num_input_channels)
+        num_input_samples = signal_file.stat().st_size // (sigmf_datatype.sample_size_bytes * num_input_channels)
 
-        stfft_obj = comp_spec.get_stft_object(input_sample_rate_Hz)
-        nfft = stfft_obj.mfft
+        stft_win_calc = comp_spec.get_stft_window_calculator(num_input_samples, input_sample_rate_Hz)
+        nfft = stft_win_calc.NFFT
 
-        input_data = np.memmap(signal_file, dtype=signal_file_datatype, mode='r', offset=0, shape=input_shape)
-        data_channel = input_data[:, target_output_channel]
+        # data fetching function that matches FetchInputSamplesCallback signature
+        def fisc(start_sample:int, num_samples:int) -> np.ndarray:
+            a = cls._get_input_data(signal_file, sigmf_datatype, num_input_channels, start_sample, num_samples)
+            return a[:, target_output_channel]
 
-        # Compute STFT
-        S = stfft_obj.stft(data_channel, p0=start_frame, p1=end_frame)
-        num_bins, num_frames = S.shape
-        assert num_bins == nfft
-        assert num_frames == (end_frame - start_frame)
+        S = stft_win_calc.calculate_stft_frames_using_callback(
+            start_frame = start_frame,
+            end_frame = end_frame,
+            fetch_input_samples_callback=fisc,
+        )
+
+        num_frames, num_bins = S.shape
+        assert num_bins == nfft, f"Expected {nfft} bins, got {num_bins}"
+        assert num_frames == (end_frame - start_frame), f"Expected {end_frame - start_frame} frames, got {num_frames}"
 
         mag_dB = 20 * np.log10(np.abs(S) + 1e-12)  # Add small value to avoid log(0)
         S = mag_dB.astype(output_dtype)
@@ -724,28 +878,28 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         #log.critical(f"about to write computed chunk {chunk_index} to memmap with shape: {output_shape}, dtype: {output_dtype}, file: {output_file}, frame range: {start_frame}-{end_frame}, S shape: {S.shape}, S dtype: {S.dtype}")   
         # Confusingly: "r+" means read/write, file must exist, if we were to say "w+" it seems to change the file size or possibly make it sparse
         output_memmap = np.memmap(output_file, dtype=output_dtype, mode='r+', shape=output_shape)
-        output_memmap[start_frame:end_frame, :] = S.T
+        output_memmap[start_frame:end_frame, :] = S
         output_memmap.flush()
 
     @property
     def time_axis(self) -> MonotonicAxis:
         num_output_frames, _ = self._output_shape
         return MonotonicAxis(
-            slope = self._stfft_obj.delta_t,
+            slope = self._stft_win_calc.frame_period_sec,
             intercept = 0.0,
             num_points = num_output_frames,
         )
             
     def get_freq_axis_assuming_center_frequency(self, center_freq_Hz:float=0.0) -> MonotonicAxis:
         # TODO: double check this math -- is center bin correct?
-        lo_freq_Hz = -(self._stfft_obj.delta_f * self._stfft_obj.f_pts//2)
+        lo_freq_Hz = -(self._stft_win_calc.delta_f_Hz * self._stft_win_calc.NFFT//2)
         lo_freq_Hz += center_freq_Hz
         return MonotonicAxis(
-            slope = self._stfft_obj.delta_f,
+            slope = self._stft_win_calc.delta_f_Hz,
             intercept = lo_freq_Hz,
-            num_points = self._stfft_obj.f_pts,
+            num_points = self._stft_win_calc.NFFT,
         )
 
     @property
     def delta_t_per_frame(self) -> float:
-        return self._stfft_obj.delta_t
+        return self._stft_win_calc.frame_period_sec
