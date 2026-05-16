@@ -224,7 +224,7 @@ class SpecanView(QWidget):
         #self._freq_plot.setAspectLocked(False)
 
         MIN_dB = -180
-        MAX_dB = 70
+        MAX_dB = 170
 
         trace_lo = round(trace.min(), -1) - 3
         trace_hi = round(trace.max(), -1) + 3
