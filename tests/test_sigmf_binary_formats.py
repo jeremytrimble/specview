@@ -17,20 +17,23 @@ from specview.chunkwise_compute import (
 )
 
 
-# All 20 supported SigMF data types
 SIGMF_DATA_TYPES = [
     # Complex float formats
     'cf32_le', 'cf32_be', 'cf64_le', 'cf64_be',
     # Complex signed integer formats
     'ci32_le', 'ci16_le', 'ci8',
+    'ci32_be', 'ci16_be', 
     # Complex unsigned integer formats
     'cu32_le', 'cu16_le', 'cu8',
+    'cu32_be', 'cu16_be', 
     # Real float formats
     'rf32_le', 'rf32_be', 'rf64_le', 'rf64_be',
     # Real signed integer formats
     'ri32_le', 'ri16_le', 'ri8',
+    'ri32_be', 'ri16_be', 
     # Real unsigned integer formats
     'ru32_le', 'ru16_le', 'ru8',
+    'ru32_be', 'ru16_be',
 ]
 
 
@@ -123,11 +126,9 @@ def generate_test_data(sigmf_dtype: str, num_samples: int = 1000) -> np.ndarray:
             imag_part = np.sin(2 * np.pi * 0.1 * t)
             data = real_part + 1j * imag_part
             
-            # Convert to the specific dtype
-            if 'c8' in str(np_dtype) or '32' in sigmf_dtype:
-                return data.astype(np.complex64)
-            else:
-                return data.astype(np.complex128)
+            # Convert to the specific dtype, preserving endianness from SigMF
+            return data.astype(np_dtype)
+
         else:
             # Complex integer: generate structured array
             if is_unsigned:
@@ -310,9 +311,9 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype, nfft:FFTLength
 
 def test_all_sigmf_formats_count():
     """
-    Verify that we're testing all 20 SigMF formats.
+    Verify that we're testing all 28 SigMF formats.
     """
-    assert len(SIGMF_DATA_TYPES) == 20, f"Expected 20 data types, found {len(SIGMF_DATA_TYPES)}"
+    assert len(SIGMF_DATA_TYPES) == 28, f"Expected 28 data types, found {len(SIGMF_DATA_TYPES)}"
 
 
 def test_sigmf_format_categories():
@@ -322,13 +323,13 @@ def test_sigmf_format_categories():
     complex_types = [dt for dt in SIGMF_DATA_TYPES if dt.startswith('c')]
     real_types = [dt for dt in SIGMF_DATA_TYPES if dt.startswith('r')]
     
-    assert len(complex_types) == 10, f"Expected 10 complex types, found {len(complex_types)}"
-    assert len(real_types) == 10, f"Expected 10 real types, found {len(real_types)}"
+    assert len(complex_types) == 14, f"Expected 14 complex types, found {len(complex_types)}"
+    assert len(real_types) == 14, f"Expected 14 real types, found {len(real_types)}"
     
     float_types = [dt for dt in SIGMF_DATA_TYPES if 'f' in dt]
     int_types = [dt for dt in SIGMF_DATA_TYPES if 'i' in dt or 'u' in dt]
     
     # We have 8 float types (4 complex + 4 real)
     assert len(float_types) == 8, f"Expected 8 float types, found {len(float_types)}"
-    # We have 12 integer types (6 complex + 6 real)
-    assert len(int_types) == 12, f"Expected 12 integer types, found {len(int_types)}"
+    # We have 20 integer types (10 complex + 10 real)
+    assert len(int_types) == 20, f"Expected 20 integer types, found {len(int_types)}"
