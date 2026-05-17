@@ -4,12 +4,36 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v1.0.0
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag for the release (e.g. v0.2.0-test). A pre-release will be created with this name.'
+        required: true
+        default: 'v0.0.0-test'
 
 permissions:
   contents: write  # needed to create GitHub releases
 
 jobs:
+  setup:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_tag: ${{ steps.get-tag.outputs.release_tag }}
+      prerelease: ${{ steps.get-tag.outputs.prerelease }}
+    steps:
+      - name: Determine release tag
+        id: get-tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "release_tag=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "release_tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
   build-binary:
+    needs: [setup]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -58,7 +82,7 @@ jobs:
       - name: Rename binary with version and platform
         shell: bash
         run: |
-          VERSION="${{ github.ref_name }}"
+          VERSION="${{ needs.setup.outputs.release_tag }}"
           VERSION="${VERSION#v}"  # strip leading 'v'
           BINARY_NAME="specview-${VERSION}-${{ matrix.binary_dst_suffix }}${{ matrix.binary_ext }}"
           mv "${{ matrix.binary_src }}" "dist/${BINARY_NAME}"
@@ -97,7 +121,7 @@ jobs:
           path: dist/*.whl
 
   release:
-    needs: [build-binary, build-wheel]
+    needs: [setup, build-binary, build-wheel]
     runs-on: ubuntu-22.04
 
     steps:
@@ -114,10 +138,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
+          RELEASE_TAG="${{ needs.setup.outputs.release_tag }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ needs.setup.outputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
           # Create the release; if it already exists (e.g. workflow re-run), upload
           # the files to the existing release instead.
-          gh release create "${{ github.ref_name }}" \
-            --title "Release ${{ github.ref_name }}" \
+          gh release create "${RELEASE_TAG}" \
+            --title "Release ${RELEASE_TAG}" \
             --generate-notes \
+            ${PRERELEASE_FLAG} \
             release-assets/* \
-          || gh release upload "${{ github.ref_name }}" release-assets/* --clobber
+          || gh release upload "${RELEASE_TAG}" release-assets/* --clobber
