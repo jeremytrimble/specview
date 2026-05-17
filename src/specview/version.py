@@ -10,8 +10,8 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# Single source of truth for the version
-__version__ = "0.0.1a1"  # PEP 440 compliant version string: 0.0.1 ALPHA 1
+# Edit this version string in lock-step with the version in pyproject.toml.
+__version__ = "0.2.0"  # Should be a PEP 440 compliant version string.
 
 @dataclass
 class VersionInfo:
