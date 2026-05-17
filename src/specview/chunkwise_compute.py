@@ -264,7 +264,7 @@ class ProcessingPoolManager:
 
     def __init__(self):
         self._pool: Pool | None = None
-        self._num_processes = max(1, cpu_count() - 2)  # Leave one CPU free
+        self._num_processes = max(1, cpu_count() - 2)  # Leave some CPUs free
 
     @classmethod
     def get_instance(cls) -> ProcessingPoolManager:
