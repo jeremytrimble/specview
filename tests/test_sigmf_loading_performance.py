@@ -9,7 +9,7 @@ from typing import NamedTuple
 
 
 @dataclass
-class TestParams:
+class MyTestParams:
     """Parameters for SigMF file loading performance tests."""
     name: str
     sample_rate: float
@@ -22,7 +22,7 @@ class TestParams:
 
 # Test case configurations
 TEST_CASES = [
-    TestParams(
+    MyTestParams(
         name="small_file",
         sample_rate=1e6,
         duration_sec=1.0,
@@ -30,7 +30,7 @@ TEST_CASES = [
         max_load_time=2.0,
         description="Small file with moderate annotations"
     ),
-    TestParams(
+    MyTestParams(
         name="large_file",
         sample_rate=1e6,
         duration_sec=5.0,
@@ -38,7 +38,7 @@ TEST_CASES = [
         max_load_time=10.0,
         description="Large file with many annotations"
     ),
-    TestParams(
+    MyTestParams(
         name="no_annotations",
         sample_rate=1e6,
         duration_sec=2.0,
@@ -46,7 +46,7 @@ TEST_CASES = [
         max_load_time=2.0,
         description="Moderate file with no annotations"
     ),
-    TestParams(
+    MyTestParams(
         name="many_annotations",
         sample_rate=1e6,
         duration_sec=2.0,
@@ -224,7 +224,7 @@ def test_sigmf_loading_performance(
     app_with_window: MainWindow, 
     qtbot: Any, 
     tmpdir: Path, 
-    test_params: TestParams
+    test_params: MyTestParams
 ) -> None:
     """
     Test SigMF file loading performance with various configurations.
@@ -295,7 +295,7 @@ def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, 
     app_state = QApplication.instance().app_state
     
     # Create a test params for multiple small files
-    multi_test_params = TestParams(
+    multi_test_params = MyTestParams(
         name="multi_test",
         sample_rate=1e6,
         duration_sec=1.0,
@@ -309,7 +309,7 @@ def test_sigmf_loading_multiple_files_sequentially(app_with_window: MainWindow, 
     
     for i in range(num_files):
         # Create a copy of params with unique name for each file
-        file_params = TestParams(
+        file_params = MyTestParams(
             **{**multi_test_params.__dict__, "name": f"multi_test_{i}"}
         )
         
