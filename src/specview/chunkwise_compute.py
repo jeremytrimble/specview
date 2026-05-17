@@ -1078,7 +1078,8 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
         nfft = stft_win_calc.NFFT
 
         # data fetching function that matches FetchInputSamplesCallback signature
-        def fisc(start_sample:int, num_samples:int) -> np.ndarray:
+        def fisc(start_sample:int, end_sample:int) -> np.ndarray:
+            num_samples = end_sample - start_sample
             a = cls._get_input_data(signal_file, sigmf_datatype, num_input_channels, start_sample, num_samples)
             return a[:, target_output_channel]
 
