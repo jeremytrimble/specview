@@ -67,7 +67,7 @@ jobs:
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: specview-binary-${{ matrix.platform }}
+          name: specview-${{ matrix.platform }}
           path: dist/${{ env.BINARY_NAME }}
 
   build-wheel:
