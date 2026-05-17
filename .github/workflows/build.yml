@@ -1,16 +1,35 @@
-name: Build Specview Executables
+name: Build and Release Specview
 
 on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v1.0.0
 
+permissions:
+  contents: write  # needed to create GitHub releases
+
 jobs:
-  build:
+  build-binary:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-latest, windows-latest] #, windows-11-arm]
+        include:
+          - os: ubuntu-22.04
+            platform: linux
+            binary_src: dist/specview
+            binary_dst_suffix: linux
+            binary_ext: ""
+          - os: macos-latest
+            platform: macos
+            binary_src: dist/specview
+            binary_dst_suffix: macos
+            binary_ext: ""
+          - os: windows-latest
+            platform: windows
+            binary_src: dist/specview.exe
+            binary_dst_suffix: windows
+            binary_ext: ".exe"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,7 +38,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-        
+
       - name: Install uv (Unix)
         if: runner.os != 'Windows'
         run: |
@@ -36,9 +55,69 @@ jobs:
           uv sync --group build --group dev
           uv run poe build-pyinstaller
 
-      - name: Upload executable artifact
+      - name: Rename binary with version and platform
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # strip leading 'v'
+          BINARY_NAME="specview-${VERSION}-${{ matrix.binary_dst_suffix }}${{ matrix.binary_ext }}"
+          mv "${{ matrix.binary_src }}" "dist/${BINARY_NAME}"
+          echo "BINARY_NAME=${BINARY_NAME}" >> $GITHUB_ENV
+
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: specview-${{ runner.os }}
-          path: |
-            dist/*
+          name: specview-binary-${{ matrix.platform }}
+          path: dist/${{ env.BINARY_NAME }}
+
+  build-wheel:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Build wheel
+        run: |
+          uv build
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: specview-wheel
+          path: dist/*.whl
+
+  release:
+    needs: [build-binary, build-wheel]
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          # merge-multiple flattens all artifacts into one directory; filenames are
+          # unique by design (platform suffix on binaries, package name on the wheel).
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Create the release; if it already exists (e.g. workflow re-run), upload
+          # the files to the existing release instead.
+          gh release create "${{ github.ref_name }}" \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            release-assets/* \
+          || gh release upload "${{ github.ref_name }}" release-assets/* --clobber
