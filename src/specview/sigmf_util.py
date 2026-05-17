@@ -50,13 +50,79 @@ def get_annotation_time_bound_relative_to_current_capture(adict: dict, current_c
 
     return start_time_sec, end_time_sec
 
-def sigmf_type_to_numpy_dtype( sigmf_type:str ) -> np.dtype:
-    """Convert a SigMF datatype string to a NumPy dtype."""
-    # TODO: support more data types in the future
-    mapping = {
-        "cf32_le": np.dtype(np.complex64),
-        "cf64_le": np.dtype(np.complex128),
-    }
-    if sigmf_type not in mapping:
-        raise ValueError(f"Unsupported SigMF datatype: {sigmf_type}")
-    return mapping[sigmf_type]  
+
+import enum
+class SigmfDataType(str, enum.Enum):
+    """
+    Enum for SigMF data types, representing the data type of the samples in a
+    SigMF file (not the type that we will use internally, which is always
+    float32 or complex64).
+    """
+
+    # Complex float formats
+    cf32_le = 'cf32_le'
+    cf32_be = 'cf32_be'
+    cf64_le = 'cf64_le'
+    cf64_be = 'cf64_be'
+
+    # Complex signed integer formats
+    ci32_le = 'ci32_le'
+    ci32_be = 'ci32_be'
+    ci16_le = 'ci16_le'
+    ci16_be = 'ci16_be'
+    ci8 = 'ci8'
+
+    # Complex unsigned integer formats
+    cu32_le = 'cu32_le'
+    cu32_be = 'cu32_be'
+    cu16_le = 'cu16_le'
+    cu16_be = 'cu16_be'
+    cu8 = 'cu8'
+
+    # Real float formats
+    rf32_le = 'rf32_le'
+    rf32_be = 'rf32_be'
+    rf64_le = 'rf64_le'
+    rf64_be = 'rf64_be'
+
+    # Real signed integer formats
+    ri32_le = 'ri32_le'
+    ri32_be = 'ri32_be'
+    ri16_le = 'ri16_le'
+    ri16_be = 'ri16_be'
+    ri8 = 'ri8'
+
+    # Real unsigned integer formats
+    ru32_le = 'ru32_le'
+    ru32_be = 'ru32_be'
+    ru16_le = 'ru16_le'
+    ru16_be = 'ru16_be'
+    ru8 = 'ru8'
+
+    @property
+    def is_complex(self) -> bool:
+        """
+        Returns True if the data type is complex, False otherwise.
+        """
+        return self.name.startswith('c')
+
+    @property
+    def sample_size_bytes(self) -> int:
+        """
+        Returns the size of a single sample in bytes. For complex types, this is the size of both the real and imaginary components combined (e.g. the component size times 2).
+        """
+        if "8" in self.name:
+            component_size_bytes = 1
+        elif "16" in self.name:
+            component_size_bytes = 2
+        elif "32" in self.name:
+            component_size_bytes = 4
+        elif "64" in self.name:
+            component_size_bytes = 8
+        else:
+            raise ValueError(f"Unknown sample size for SigMF data type: {self.name}")
+
+        if self.is_complex:
+            return component_size_bytes * 2
+        else:
+            return component_size_bytes

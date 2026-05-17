@@ -6,7 +6,8 @@ from specview.chunkwise_compute import (
     ProcessingPoolManager, ChunkwiseComputedArray,
 
     FrequencyDomainChunkwiseComputedArray,
-    FrequencyDomainComputationSpec
+    FrequencyDomainComputationSpec,
+    SigmfDataType
 )
 import numpy as np
 from pathlib import Path
@@ -46,7 +47,7 @@ def test_chunkwise_computation_timedomain(tmpdir):
         # Create the chunkwise computed array
         computed_array = TimeDomainChunkwiseComputedArray(
             signal_file=input_signal_file,
-            signal_file_datatype=np.dtype(np.complex64),
+            sigmf_datatype=SigmfDataType.cf32_le,
             num_channels=1,
             chunk_size_samples=chunk_size,
             comp_spec=comp_spec,
@@ -94,7 +95,7 @@ def test_chunkwise_computation_frequency_domain(tmpdir):
         # Create the chunkwise computed array
         computed_array = FrequencyDomainChunkwiseComputedArray(
             signal_file=input_signal_file,
-            signal_file_datatype=np.dtype(np.complex64),
+            sigmf_datatype=SigmfDataType.cf32_le,
             num_input_channels=1,
             target_output_channel=0,
             sample_rate_Hz=1e6,

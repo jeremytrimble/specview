@@ -6,8 +6,7 @@ from pathlib import Path
 import enum
 import numpy as np
 import sigmf
-#from sigmf.sigmffile import dtype_info as sigmf_dtype_info
-from .sigmf_util import get_annotation_time_bound_relative_to_current_capture, sigmf_type_to_numpy_dtype
+from .sigmf_util import get_annotation_time_bound_relative_to_current_capture, SigmfDataType
 from .monotonic_axis import MonotonicAxis
 from PyQt6.QtWidgets import QApplication
 
@@ -778,14 +777,17 @@ class LoadedFile:
             del self._parent_loaded_files._capture_id_to_capture[cap.capture_id]
         self._capture_id_to_capture.clear()
 
+    @property
+    def sigmf_datatype(self) -> SigmfDataType:
+        return SigmfDataType(self.sigmf_file.get_global_field(sigmf.SigMFFile.DATATYPE_KEY))
+
     def get_time_chunkwise_computed_array(self, comp_spec: TimeDomainComputationSpec = RawTimeDomainComputationSpec()) -> TimeDomainChunkwiseComputedArray:
         if comp_spec not in self._time_ccas:
-            sample_dtype: np.dtype = sigmf_type_to_numpy_dtype( self.sigmf_file.get_global_info()[sigmf.SigMFFile.DATATYPE_KEY] ) 
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = TimeDomainChunkwiseComputedArray(
                 signal_file = self.sigmf_data_file_path,
-                signal_file_datatype = sample_dtype,
+                sigmf_datatype = self.sigmf_datatype,
                 comp_spec= comp_spec,
                 num_channels=num_channels,
             )
@@ -802,13 +804,12 @@ class LoadedFile:
         key = (comp_spec.model_dump_json(), selected_channel)
 
         if key not in self._freq_ccas:
-            sample_dtype: np.dtype = sigmf_type_to_numpy_dtype( self.sigmf_file.get_global_info()[sigmf.SigMFFile.DATATYPE_KEY] ) 
             sample_rate_Hz: float = self.sigmf_file.get_global_field(sigmf.SigMFFile.SAMPLE_RATE_KEY)
             num_channels = self.sigmf_file.get_global_field(sigmf.SigMFFile.NUM_CHANNELS_KEY, 1 )
 
             cca = FrequencyDomainChunkwiseComputedArray(
                 signal_file= self.sigmf_data_file_path,
-                signal_file_datatype= sample_dtype,
+                sigmf_datatype= self.sigmf_datatype,
                 comp_spec= comp_spec,
                 num_input_channels= num_channels,
                 target_output_channel = selected_channel,

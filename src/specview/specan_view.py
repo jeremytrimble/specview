@@ -224,7 +224,7 @@ class SpecanView(QWidget):
         #self._freq_plot.setAspectLocked(False)
 
         MIN_dB = -180
-        MAX_dB = 70
+        MAX_dB = 170
 
         trace_lo = round(trace.min(), -1) - 3
         trace_hi = round(trace.max(), -1) + 3
@@ -363,7 +363,10 @@ class ChunkHolder(QObject):
             return self._averaged_trace, self._array_freq_axis_Hz
         
         # Need to compute the average. First, get the raw data.
-        rv = self.get_data_for(capture_id, channel, t_lo, duration_sec=t_hi - t_lo)
+        duration_sec = t_hi - t_lo
+        if duration_sec <= 0:
+            return None
+        rv = self.get_data_for(capture_id, channel, t_lo, duration_sec=duration_sec)
         if rv is None:
             # Raw data not available yet, background load in progress
             return None
