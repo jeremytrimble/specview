@@ -24,6 +24,7 @@ def test_mmap_sparse_file(tmp_path):
     # On Unix, mmap offsets must be aligned to page boundaries (typically 4KB)
     # We use ALLOCATIONGRANULARITY when available to ensure cross-platform compatibility
     page_size = mmap.ALLOCATIONGRANULARITY if hasattr(mmap, 'ALLOCATIONGRANULARITY') else mmap.PAGESIZE
+
     
     # Step 1: Create a sparse file
     # We'll create a file with sparse region at the beginning, then write data further in
