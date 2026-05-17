@@ -172,7 +172,6 @@ class ChunkwiseComputedArray:
             # Note the order of operations: astype() actually turns ints into floats, then view() reinterprets the float array as complex.
             def convert_components_to_complex_and_reshape(arr: np.ndarray) -> np.ndarray:
                 # convert to float32 and view as complex64
-                print(f"about to convert {arr.shape} of {arr.dtype} to complex64")
                 arr = arr.astype(np.float32).view(np.complex64)
                 # reshape to (num_samples, num_input_channels)
                 arr = arr.reshape((num_samples, num_input_channels))
