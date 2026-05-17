@@ -58,7 +58,7 @@ class WaterfallView(QWidget):
 
         self._roiPen = pg.mkPen(INTERVAL_ROI_COLOR, width=3)
         #roi = pg.RectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False)
-        roi = LabeledRectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False, label_text="Waterfall ROI", label_text_color=(255,255,255), label_fill_color=INTERVAL_ROI_COLOR)
+        roi = LabeledRectROI(pos=(0,0), size=(200,400), sideScalers=True, rotatable=False, label_text="ROI", label_text_color=(255,255,255), label_fill_color=INTERVAL_ROI_COLOR)
         roi.setPen(self._roiPen)
         roi.setVisible(False) # Initially hidden
 
