@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from specview.stft_window_calc import STFTWindowCalculator
+from specview.chunkwise_compute import STFTWindowCalculator, WindowType
 
 
 def test_num_frames_uses_floor_division() -> None:
@@ -10,6 +10,7 @@ def test_num_frames_uses_floor_division() -> None:
         sample_rate_Hz=1.0,
         NFFT=8,
         win_length_samples=6,
+        win_type=WindowType.HAMMING,
         hop_samples=4,
     )
 
@@ -23,6 +24,7 @@ def test_calculate_input_sample_range_for_frame_handles_edge_padding() -> None:
         sample_rate_Hz=1.0,
         NFFT=8,
         win_length_samples=6,
+        win_type=WindowType.HAMMING,
         hop_samples=4,
     )
 
@@ -56,6 +58,7 @@ def test_calculate_input_sample_range_for_frame_range_rejects_invalid_ranges(
         sample_rate_Hz=1.0,
         NFFT=8,
         win_length_samples=6,
+        win_type=WindowType.HAMMING,
         hop_samples=4,
     )
 
@@ -68,6 +71,7 @@ def test_calculate_stft_frames_using_callback_matches_direct_path() -> None:
         sample_rate_Hz=1.0,
         NFFT=8,
         win_length_samples=6,
+        win_type=WindowType.HAMMING,
         hop_samples=4,
     )
 
@@ -104,6 +108,7 @@ def test_single_frame_matches_same_frame_from_batch() -> None:
         num_input_samples=24,
         sample_rate_Hz=1.0,
         NFFT=8,
+        win_type=WindowType.HAMMING,
         win_length_samples=6,
         hop_samples=4,
     )
