@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt
+from PyQt6.QtCore import Qt
 import pyqtgraph as pg
 from .roi_select_viewboxes import IntervalSelectViewBox, RectSelectViewBox
 
