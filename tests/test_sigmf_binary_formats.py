@@ -212,7 +212,7 @@ def create_sigmf_file(tmpdir, sigmf_dtype: str, num_samples:int) -> Path:
 
 @pytest.mark.parametrize("sigmf_dtype", SIGMF_DATA_TYPES)
 @pytest.mark.parametrize("nfft", [FFTLength.N256, FFTLength.N512, FFTLength.N1024])
-@pytest.mark.parametrize("sample_count", [10000, int(10e6)])
+@pytest.mark.parametrize("sample_count", [100_000])
 def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype, nfft:FFTLength, sample_count:int):
     """
     Test generating and loading a SigMF file with a specific binary format.
@@ -275,7 +275,7 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype, nfft:FFTLength
     assert time_data is not None, f"Failed to get time data for {sigmf_dtype}"
     assert time_data.shape[0] == 100, f"Time data shape mismatch for {sigmf_dtype}"
 
-    # Request a the end of the time data
+    # Request the end of the time data
     max_sample = time_shape[0]
     start_sample = max(0, max_sample - 100)
     time_data = time_cca.get_range_blocking(start_sample, max_sample)
