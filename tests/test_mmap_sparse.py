@@ -1,3 +1,4 @@
+import contextlib
 import mmap
 import os
 import platform
@@ -6,7 +7,7 @@ import platform
 def test_mmap_sparse_file(tmp_path):
     """
     Test memory-mapping behavior with sparse files.
-    
+
     This test validates that:
     1. A sparse file can be created by seeking past the end and writing
     2. A non-sparse region can be memory-mapped while the file is sparse
@@ -15,16 +16,28 @@ def test_mmap_sparse_file(tmp_path):
     5. A new mapping of the formerly sparse region returns correct contents
     6. Sparse regions are verified to be actually sparse (zeros) initially
     7. Sparse regions become non-sparse after writing to them
+
+    Cross-platform notes:
+    - On Windows, creating two mmap objects with different sizes from the same file
+      handle fails (OSError/WinError 87).  Each mmap therefore uses its own file
+      handle opened in "rb" mode with ACCESS_READ.
+    - Using ACCESS_READ (PAGE_READONLY) on separate "rb" handles allows a concurrent
+      writer handle to modify the file without triggering Windows sharing violations.
+    - os.fsync() is called after each write so that a subsequently created mmap sees
+      the committed data on all platforms.
     """
     # Create a temporary file path
     temp_file = tmp_path / "sparse_test.dat"
-    
+
     # Get the page size for proper mmap alignment
     # On Windows, mmap offsets must be aligned to ALLOCATIONGRANULARITY (typically 64KB)
     # On Unix, mmap offsets must be aligned to page boundaries (typically 4KB)
     # We use ALLOCATIONGRANULARITY when available to ensure cross-platform compatibility
     page_size = mmap.ALLOCATIONGRANULARITY if hasattr(mmap, 'ALLOCATIONGRANULARITY') else mmap.PAGESIZE
-    
+
+    non_sparse_data = b"FIRST_REGION_DATA_CONTENT_123"
+    sparse_region_data = b"SPARSE_REGION_NOW_FILLED_456"
+
     # Step 1: Create a sparse file
     # We'll create a file with sparse region at the beginning, then write data further in
     with open(temp_file, "wb") as f:
@@ -32,24 +45,23 @@ def test_mmap_sparse_file(tmp_path):
         # Use page_size to ensure proper alignment for mmap
         f.seek(page_size)
         # Write some data in a non-sparse region
-        non_sparse_data = b"FIRST_REGION_DATA_CONTENT_123"
         f.write(non_sparse_data)
         f.flush()
-    
+
     # Verify the sparse region is actually sparse (reads as zeros)
     with open(temp_file, "rb") as f:
         f.seek(0)
         sparse_region_content = f.read(page_size)
         assert sparse_region_content == b'\x00' * page_size, \
             "Sparse region should read as zeros initially"
-    
+
     # Check filesystem-level sparseness if supported (st_blocks available on POSIX)
     stat_info = os.stat(temp_file)
     file_size = stat_info.st_size
     expected_size = page_size + len(non_sparse_data)
     assert file_size == expected_size, \
         f"File size should be {expected_size} bytes"
-    
+
     # On systems that support st_blocks, verify sparse file behavior
     # Note: Different filesystems handle sparse files differently
     # - Linux (ext4, btrfs, xfs): typically sparse-aware, uses fewer blocks
@@ -59,7 +71,7 @@ def test_mmap_sparse_file(tmp_path):
         blocks_used = stat_info.st_blocks
         # st_blocks is always in 512-byte blocks according to POSIX
         blocks_if_full = (file_size + 511) // 512
-        
+
         # Only assert sparse behavior on Linux where it's reliable
         if platform.system() == 'Linux':
             # On Linux, sparse files should use fewer blocks
@@ -67,43 +79,62 @@ def test_mmap_sparse_file(tmp_path):
                 f"Sparse file should use fewer blocks ({blocks_used}) than if fully allocated ({blocks_if_full})"
         # On other systems (like macOS), just log the values but don't assert
         # as the filesystem may handle sparse files differently
-    
-    # Step 2: Memory-map the non-sparse region
-    with open(temp_file, "r+b") as f:
+
+    # Step 2: Memory-map the non-sparse region.
+    #
+    # Cross-platform requirements:
+    #   - Each mmap uses its own "rb" file handle opened with ACCESS_READ.
+    #     On Windows, two mmap objects with different sizes created from the
+    #     *same* file handle raise OSError (WinError 87 / ERROR_INVALID_PARAMETER).
+    #   - "rb" + ACCESS_READ is compatible on all platforms and lets a concurrent
+    #     write handle materialise additional regions without sharing violations.
+    #   - The write handle is separate ("r+b"), mirroring the intended real-world
+    #     pattern where a background process writes to the file independently.
+    with contextlib.ExitStack() as stack:
+        read_f1 = stack.enter_context(open(temp_file, "rb"))
+        read_f2 = stack.enter_context(open(temp_file, "rb"))
+        write_f = stack.enter_context(open(temp_file, "r+b"))
+
         # Map the region where we wrote non_sparse_data (starting at page_size offset)
-        mm1 = mmap.mmap(f.fileno(), len(non_sparse_data), offset=page_size)
-        
+        mm1 = stack.enter_context(
+            mmap.mmap(read_f1.fileno(), len(non_sparse_data),
+                      access=mmap.ACCESS_READ, offset=page_size)
+        )
+
         # Verify the first mapping contains the expected data
         assert mm1[:] == non_sparse_data, "First mapping should contain the data we wrote"
-        
-        # Step 3: While the first mapping is active, write to the previously sparse region
-        # We need to write to a different part of the file (the sparse region)
-        f.seek(0)
-        sparse_region_data = b"SPARSE_REGION_NOW_FILLED_456"
-        f.write(sparse_region_data)
-        f.flush()
-        
+
+        # Step 3: While the first mapping is active, write to the previously sparse region.
+        # Using a dedicated write handle (separate from the mmap handles) avoids
+        # Windows file-mapping conflicts and mirrors the real background-writer pattern.
+        write_f.seek(0)
+        write_f.write(sparse_region_data)
+        write_f.flush()
+        # fsync ensures the OS page cache is updated so a subsequently created
+        # mmap sees the committed data on all platforms (especially Windows)
+        os.fsync(write_f.fileno())
+
         # Verify the region that was sparse now contains non-zero data
-        f.seek(0)
-        newly_written_data = f.read(len(sparse_region_data))
+        write_f.seek(0)
+        newly_written_data = write_f.read(len(sparse_region_data))
         assert newly_written_data == sparse_region_data, \
             "Previously sparse region should now contain the written data"
         assert newly_written_data != b'\x00' * len(sparse_region_data), \
             "Previously sparse region should no longer be all zeros"
-        
-        # Step 4: Create a second mapping for the newly written (formerly sparse) region
-        mm2 = mmap.mmap(f.fileno(), len(sparse_region_data), offset=0)
-        
+
+        # Step 4: Create a second mapping for the newly written (formerly sparse) region.
+        # read_f2 is a separate file handle so that both mmaps can coexist on Windows.
+        mm2 = stack.enter_context(
+            mmap.mmap(read_f2.fileno(), len(sparse_region_data),
+                      access=mmap.ACCESS_READ, offset=0)
+        )
+
         # Assert that the first mapping is still usable and returns expected contents
         assert mm1[:] == non_sparse_data, "First mapping should still contain original data"
-        
+
         # Assert that the second mapping returns the right contents
         assert mm2[:] == sparse_region_data, "Second mapping should contain the newly written data"
-        
-        # Clean up mappings
-        mm1.close()
-        mm2.close()
-    
+
     # Verify the file now uses more blocks after writing to the sparse region
     if hasattr(stat_info, 'st_blocks'):
         stat_info_after = os.stat(temp_file)
@@ -113,11 +144,11 @@ def test_mmap_sparse_file(tmp_path):
         # but it should be true on typical POSIX systems
         assert blocks_used_after >= blocks_used, \
             f"File should use at least as many blocks after writing ({blocks_used_after}) as before ({blocks_used})"
-    
+
     # Additional verification: re-open and verify both regions persisted correctly
     with open(temp_file, "rb") as f:
         f.seek(0)
         assert f.read(len(sparse_region_data)) == sparse_region_data, "Sparse region data should persist"
-        
+
         f.seek(page_size)
         assert f.read(len(non_sparse_data)) == non_sparse_data, "Original non-sparse region data should persist"
