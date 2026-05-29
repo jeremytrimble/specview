@@ -18,6 +18,8 @@ import os
 import time
 import dataclasses
 from functools import lru_cache
+import shutil
+import atexit
 
 from specview.monotonic_axis import MonotonicAxis
 log = logging.getLogger("chunkwise_compute")
@@ -188,19 +190,29 @@ class ChunkwiseComputedArray:
 
         return a
 
-
 class CacheManager:
-    def __init__(self, base_path: Path):
+    def __init__(self, base_path: Path, remove_at_exit:bool=True):
         self._cache_base_path = base_path
         self._cache_base_path.mkdir(parents=True, exist_ok=True)
+        self._remove_at_exit = remove_at_exit
+        if self._remove_at_exit:
+            atexit.register(self._cleanup)
     
+    def _cleanup(self):
+        if self._remove_at_exit:
+            try:
+                shutil.rmtree(self._cache_base_path, ignore_errors=True)
+            except Exception as e:
+                log.warning(f"Failed to remove cache directory {self._cache_base_path}: {e}")
+
     def get_cache_path_from_tag(self, tag: str) -> Path:
         # TODO: later, add LRU management of cache entries
         return self._cache_base_path / tag
 
     @classmethod
     def get_default_cache_manager(cls) -> CacheManager:
-        default_cache_dir = Path(user_cache_dir("specview", "jeremytrimble", ensure_exists=True)) / "ccache"
+        my_pid = os.getpid()
+        default_cache_dir = Path(user_cache_dir("specview", "jeremytrimble", ensure_exists=True)) / f"ccache.{my_pid}"
         return CacheManager(default_cache_dir)
 
     @classmethod
