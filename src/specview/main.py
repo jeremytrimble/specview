@@ -83,8 +83,18 @@ class MainWindow(QMainWindow):
 
         self._connect_app_signals()
 
+        self.time_view.time_view_decimation_changed.connect(self._time_view_decimation_updated)
+
         # Load saved geometry and state, or use defaults
         self._load_window_state()
+
+    def _time_view_decimation_updated(self, M: int):
+        """Handle updates to the time view decimation."""
+        if M > 1:
+            title = f"Time View (decimated: {M=})"
+        else:
+            title = "Time View"
+        self.time_dock.setWindowTitle(title)
 
     def _create_dock_widget(self, title: str, widget: QWidget) -> QDockWidget:
         """Create a dock widget with the given title and widget."""

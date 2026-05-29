@@ -11,7 +11,7 @@ from specview.loaded_file_mgmt import (
     LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID,
 )
 from specview.util import measure_runtime, first_from_dict
-from specview.chunkwise_compute import FrequencyDomainComputationSpec, FFTLength
+from specview.chunkwise_compute import CacheManager, FrequencyDomainComputationSpec, FFTLength
 from specview.ui_constants import SETTINGS_ORGANIZATION, SETTINGS_APPLICATION
 import numpy as np
 
@@ -126,7 +126,9 @@ class AppState(QObject):
         self._time_interval_gate = SignalGate()
         self._frequency_interval_gate = SignalGate()
 
-        self._loaded_files = LoadedFilesCollection()
+        self._cache_manager = CacheManager.get_default_cache_manager()
+
+        self._loaded_files = LoadedFilesCollection(cache_manager=self._cache_manager)
         self._loaded_files.set_file_load_or_unload_callback(self._on_file_load_or_unload)
         self._loaded_files.set_annotation_changed_callback(self._on_annotation_changed)
         self._loaded_files.set_file_saved_status_changed(self._on_file_saved_status_changed)

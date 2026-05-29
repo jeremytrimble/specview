@@ -20,7 +20,9 @@ ROIType = TypeVar('ROIType', LabeledRectROI, LabeledLinearRegionItem)
 class AnnotationROI(Generic[ROIType]):
     """Class to hold an annotation ROI and its metadata"""
     annotation_id: AnnotationID
-    roi: ROIType
+    roi: ROIType|None = None
+    added_to_plot: bool = False
+    pos_and_size_or_region: Union[tuple[float, float, float, float], tuple[float, float]]|None = None
 
 class ROIDimensions(enum.IntEnum):
     TIME = 1
@@ -83,12 +85,13 @@ class AnnotationROIManager(Generic[ROIType]):
         # Create annotation ROIs for annotations that overlap the new capture
         loaded_capture_dict = self._get_app_state().get_capture_by_id(capture_id)
         for annotation_id in loaded_capture_dict.parent_loadedfile.get_annotations_dict().keys():
-            self._create_or_update_annotation_roi_for_annotation_id(annotation_id)
+            self._create_or_update_annotation_roi_for_annotation_id(annotation_id, LoadedDictAction.LOADED)
             
     def _on_rect_roi_changed(self, annotation_id: AnnotationID):
         """Handle changes to rectangular ROIs when they're dragged or resized."""
         aroi = self._annotation_rois[annotation_id]
         rect_roi = aroi.roi
+        assert isinstance(rect_roi, LabeledRectROI), "Expected rectangular ROI to exist"
         pos = rect_roi.pos()
         size = rect_roi.size()
         
@@ -109,6 +112,7 @@ class AnnotationROIManager(Generic[ROIType]):
         """Handle changes to linear ROIs when they're dragged or resized."""
         aroi = self._annotation_rois[annotation_id]
         linear_roi = aroi.roi
+        assert isinstance(linear_roi, LabeledLinearRegionItem), "Expected linear ROI to exist"
         region = linear_roi.getRegion()
         
         annotation_dict = self._get_app_state().get_annotation_by_id(annotation_id)
@@ -133,11 +137,13 @@ class AnnotationROIManager(Generic[ROIType]):
 
         if previously_selected is not None and previously_selected in self._annotation_rois:
             aroi = self._annotation_rois[previously_selected]
-            aroi.roi.setColors( text_color=(255, 255, 255), fill_color=ANNOTATION_ROI_COLOR )
+            if aroi.roi is not None:    # roi may not have been created yet
+                aroi.roi.setColors( text_color=(255, 255, 255), fill_color=ANNOTATION_ROI_COLOR )
 
         if annotation_id is not None and annotation_id in self._annotation_rois:
             aroi = self._annotation_rois[annotation_id]
-            aroi.roi.setColors( text_color=(255, 255, 255), fill_color=SELECTED_ANNOTATION_ROI_COLOR)
+            if aroi.roi is not None:    # roi may not have been created yet
+                aroi.roi.setColors( text_color=(255, 255, 255), fill_color=SELECTED_ANNOTATION_ROI_COLOR)
     
     def _on_label_clicked(self, annotation_id: AnnotationID):
         """Handle label clicks to select the annotation."""
@@ -145,7 +151,29 @@ class AnnotationROIManager(Generic[ROIType]):
         app_state = self._get_app_state()
         app_state.set_selected_annotation(annotation_id)
 
-    def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id: AnnotationID):
+    def _build_roi(self, pos_and_size_or_region, label_text: str) -> ROIType:
+        """Build an ROI based on the current dimensions and provided parameters."""
+        if self._roi_dimensions == ROIDimensions.TIME_AND_FREQUENCY:
+            pos, size = pos_and_size_or_region
+            roi = self._roi_factory(
+                pos=pos,
+                size=size,
+                label_text=label_text,
+                label_text_color=(255, 255, 255),
+                label_fill_color=ANNOTATION_ROI_COLOR,
+                sideScalers=True,
+            )
+        else:  # TIME or FREQUENCY
+            region = pos_and_size_or_region
+            roi = self._roi_factory(
+                values=region,
+                label_text=label_text,
+                label_text_color=(255, 255, 255),
+                label_fill_color=ANNOTATION_ROI_COLOR,
+            )
+        return roi
+
+    def _create_or_update_annotation_roi_for_annotation_id(self, annotation_id: AnnotationID, action: LoadedDictAction):
         """Create or update an annotation ROI based on the annotation ID."""
         if self._current_capture_id is None:
             log.debug(f"Skipping annotation {annotation_id=}, because no capture is selected")
@@ -171,24 +199,16 @@ class AnnotationROIManager(Generic[ROIType]):
             freq_lo_Hz, freq_hi_Hz = freq_range_Hz
             time_lo_sec, time_hi_sec = time_range_sec
 
+            pos = (freq_lo_Hz, time_lo_sec)
+            size = (freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec)
+
             if ad.annotation_id not in self._annotation_rois:
-                roi = self._roi_factory(
-                    pos=(freq_lo_Hz, time_lo_sec),
-                    size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec),
-                    label_text_color=(255, 255, 255),
-                    label_fill_color=ANNOTATION_ROI_COLOR,
-                    sideScalers=True,
-                )
-                self._plot_widget.addItem(roi, ignoreBounds=True)
-                roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
-                # Connect label click
-                roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
-                aroi = AnnotationROI(ad.annotation_id, roi)
+                aroi = AnnotationROI(ad.annotation_id)
                 self._annotation_rois[ad.annotation_id] = aroi
             else:
                 aroi = self._annotation_rois[ad.annotation_id]
-                aroi.roi.setPos(pos=(freq_lo_Hz, time_lo_sec))
-                aroi.roi.setSize(size=(freq_hi_Hz - freq_lo_Hz, time_hi_sec - time_lo_sec))
+            aroi.pos_and_size_or_region = (pos, size)
+
         else: # TIME or FREQUENCY
             # Handle linear ROI (Time or Spectrum view)
             if self._roi_dimensions == ROIDimensions.FREQUENCY:
@@ -201,24 +221,35 @@ class AnnotationROIManager(Generic[ROIType]):
                 raise ValueError(f"Unsupported ROI dimension type: {self._roi_dimensions}")
 
             if ad.annotation_id not in self._annotation_rois:
-                roi = self._roi_factory(
-                    values=region,
-                    label_text=ad.label,
-                    label_text_color=(255, 255, 255),
-                    label_fill_color=ANNOTATION_ROI_COLOR,
-                )
-                self._plot_widget.addItem(roi, ignoreBounds=True)
-                roi.sigRegionChanged.connect(lambda: self._on_linear_roi_changed(annotation_id))
-                # Connect label click
-                roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
-                aroi = AnnotationROI(ad.annotation_id, roi)
+                aroi = AnnotationROI(ad.annotation_id)
                 self._annotation_rois[ad.annotation_id] = aroi
             else:
                 aroi = self._annotation_rois[ad.annotation_id]
-                aroi.roi.setRegion(region)
+            aroi.pos_and_size_or_region = region
 
-        aroi.roi.setVisible(ad.visible)
-        aroi.roi.setLabel(ad.label)
+        if ad.visible: 
+            if not aroi.added_to_plot:
+                if aroi.roi is None:
+                    aroi.roi = self._build_roi(aroi.pos_and_size_or_region, ad.label)
+                    if self._roi_dimensions == ROIDimensions.TIME_AND_FREQUENCY:
+                        aroi.roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
+                    else:
+                        aroi.roi.sigRegionChanged.connect(lambda: self._on_linear_roi_changed(annotation_id))
+                    aroi.roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
+                self._plot_widget.addItem(aroi.roi, ignoreBounds=True)
+                aroi.added_to_plot = True
+
+            if self._roi_dimensions == ROIDimensions.TIME_AND_FREQUENCY:
+                pos, size = aroi.pos_and_size_or_region
+                aroi.roi.setPos(pos)
+                aroi.roi.setSize(size)
+            else:
+                region = aroi.pos_and_size_or_region
+                aroi.roi.setRegion(region)
+            aroi.roi.setLabel(ad.label)
+        elif not ad.visible and aroi.added_to_plot:
+            self._plot_widget.removeItem(aroi.roi)
+            aroi.added_to_plot = False
 
     def on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
         """Handle annotation changes (creation, updates, deletion)."""
@@ -226,6 +257,6 @@ class AnnotationROIManager(Generic[ROIType]):
             if action in (LoadedDictAction.DELETED, LoadedDictAction.CLOSED):
                 self._remove_annotation_roi(annotation_id)
             else:
-                self._create_or_update_annotation_roi_for_annotation_id(annotation_id)
+                self._create_or_update_annotation_roi_for_annotation_id(annotation_id, action)
         except Exception as e:
             log.exception(f"Error in AnnotationROIManager on_annotation_changed: {e}")

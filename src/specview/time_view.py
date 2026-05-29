@@ -12,6 +12,7 @@ from .labeled_linear_region_item import LabeledLinearRegionItem
 from .annotation_roi_manager import AnnotationROIManager, ROIDimensions
 from .util import duration_format, freq_format
 import threading
+import time
 
 from .chunkwise_compute import ChunkwiseComputedArray
 import logging
@@ -20,8 +21,11 @@ log = logging.getLogger(__name__)
 INITIAL_TIME_POINTS_TO_DISPLAY = 100_000
 
 class TimeView(QWidget):
+    time_view_decimation_changed = pyqtSignal(int, name="time_view_decimation_changed")
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self._max_points_to_display = 100_000
 
         myvb = IntervalSelectViewBox()
 
@@ -31,9 +35,6 @@ class TimeView(QWidget):
 
         self._time_plot_curve_i = self._time_plot.plot([], name="real", pen=pg.mkPen('b')) 
         self._time_plot_curve_q = self._time_plot.plot([], name="imaginary", pen=pg.mkPen('r')) 
-
-        self._time_plot_curve_i.setDownsampling(auto=True, method='peak')
-        self._time_plot_curve_q.setDownsampling(auto=True, method='peak')
 
         self._time_crosshair_x = pg.InfiniteLine(angle=90, movable=False)
         self._time_plot.addItem(self._time_crosshair_x, ignoreBounds=True)
@@ -75,6 +76,9 @@ class TimeView(QWidget):
         self._data_update_in_progress: TimeViewUpdaterWorker|None = None
 
         self._connect_app_signals()
+
+        self._current_decimation_M: int = 1
+        self.time_view_decimation_changed.emit(self._current_decimation_M)
 
     def _get_app_state(self) -> AppState:
         return QApplication.instance().app_state
@@ -188,28 +192,18 @@ class TimeView(QWidget):
             self._time_crosshair_x.setPos( time_sec )
             self._get_app_state().set_cursor_time(time_sec)
 
-    def _redisplay(self):
-
-        # TODO: pick out the right channel
-        chan = 0
-
-        # TODO: do this when new data is initially displayed
-        #time_lo_sec = self._time_series.time_sec.min
-        #time_hi_sec = self._time_series.time_sec.max
-        #self._time_plot.setXRange(time_lo_sec, time_hi_sec)
-
-        self._time_plot_curve_i.setData(
-            x = self._time_series.time_sec.array,
-            y = self._time_series.data[chan,:].real,
-        )
-        self._time_plot_curve_q.setData(
-            x = self._time_series.time_sec.array,
-            y = self._time_series.data[chan,:].imag,
-        )
 
     def _set_plot_data(self, array_data: np.ndarray, true_start_idx_relto_capture: int):
 
         chan = 0 # TODO: pick out the right channel
+
+        # Limit the number of points to display to avoid performance issues
+        num_samples, num_channels = array_data.shape
+
+        # compute a reasonable decimation factor to limit the number of points displayed
+        M = 1
+        if num_samples > self._max_points_to_display:
+            M = num_samples // self._max_points_to_display
 
         capture = self._get_app_state().get_capture_by_id(self._selected_capture_id)
         if not capture:
@@ -219,27 +213,31 @@ class TimeView(QWidget):
         if sample_rate_Hz is None or sample_rate_Hz <= 0:    
             return  
 
-        num_samples = array_data.shape[0]
-        time_sec_axis = np.arange(true_start_idx_relto_capture, true_start_idx_relto_capture + num_samples) / sample_rate_Hz    
+        time_sec_axis = np.arange(true_start_idx_relto_capture, true_start_idx_relto_capture + num_samples, M) / sample_rate_Hz
+
+        i_y_to_set = array_data[::M,chan].real
+        q_y_to_set = array_data[::M,chan].imag
 
         self._time_plot_curve_i.setData(
             x = time_sec_axis,
-            y = array_data[:,chan].real,
+            y = i_y_to_set,
         )
         self._time_plot_curve_q.setData(
             x = time_sec_axis,
-            y = array_data[:,chan].imag,
+            y = q_y_to_set,
         )
 
         self._time_plot.setLimits(
             xMin=0.0,
             xMax=capture.duration_sec,
-            maxXRange=5.0, #TODO: is this reasonable?
+            maxXRange=10.0, #TODO: is this reasonable?
             # TODO: compute exents of data in thread and set limits appropriately
         )
 
-        #self._time_plot.setXRange(time_sec_axis.min(), time_sec_axis.max())
-        #self._time_plot.setYRange(-1.1, 1.1)  # reasonable default for normalized data, TODO: make this based on data extents later?
+        old_M = self._current_decimation_M
+        if M != old_M:
+            self.time_view_decimation_changed.emit(M)
+        self._current_decimation_M = M
 
     def seek_to_time(self, time_sec: float):
         """Seek to a specific time in seconds by centering the view on it."""

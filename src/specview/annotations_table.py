@@ -25,12 +25,12 @@ class AnnotationsModel(QAbstractTableModel):
             "Label",
             "Start Time",
             "End Time",
-            "Duration (sec)",
+            "Duration",
             "Low Freq",
             "Center Freq",
             "High Freq",
             "Bandwidth",
-            "More Info",
+            #"More Info",
         )
         # Define which columns are editable
         self._editable_columns = {
@@ -208,8 +208,8 @@ class AnnotationsModel(QAbstractTableModel):
                     return "--"
                 else:
                     return freq_format(v)
-            elif col == 9:
-                return "TODO"   # put more here
+            #elif col == 9:
+            #    return "TODO"   # put more here
         
         elif role == Qt.ItemDataRole.CheckStateRole:
             # Only handle checkbox for the visible column
@@ -252,9 +252,9 @@ class AnnotationsModel(QAbstractTableModel):
                 # Bandwidth - return numeric value or inf for None
                 v = annotation.bandwidth_Hz
                 return v if v is not None else float('inf')
-            elif col == 9:
-                # More Info - return string
-                return "TODO"
+            #elif col == 9:
+            #    # More Info - return string
+            #    return "TODO"
 
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
         # Handle checkbox state changes

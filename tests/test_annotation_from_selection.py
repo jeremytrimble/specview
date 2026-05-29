@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import Mock
 import pytest
 
-from specview.loaded_file_mgmt import LoadedFilesCollection
+from specview.loaded_file_mgmt import LoadedFilesCollection, CacheManager
 from specview.app_state import AppState
 from specview.menu import create_annotation_from_selection
 
@@ -28,7 +28,8 @@ def generate_test_sigmffile(tmpdir) -> Path:
 def test_create_annotation_with_time_only(tmpdir, monkeypatch):
     """Test creating an annotation with only time selection."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     # Get the first capture ID
@@ -65,7 +66,8 @@ def test_create_annotation_with_time_only(tmpdir, monkeypatch):
 def test_create_annotation_with_time_and_frequency(tmpdir, monkeypatch):
     """Test creating an annotation with both time and frequency selections."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     # Get the first capture ID
@@ -102,7 +104,8 @@ def test_create_annotation_with_time_and_frequency(tmpdir, monkeypatch):
 def test_create_annotation_no_time_selection(tmpdir, monkeypatch):
     """Test that creating an annotation without time selection does nothing."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     # Get the first capture ID
@@ -131,7 +134,8 @@ def test_create_annotation_no_time_selection(tmpdir, monkeypatch):
 def test_create_annotation_no_capture_selected(tmpdir, monkeypatch):
     """Test that creating an annotation without a capture selected does nothing."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     # Mock AppState with no capture selected

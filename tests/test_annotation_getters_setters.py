@@ -3,7 +3,7 @@ import numpy as np
 from pathlib import Path
 import pytest
 
-from specview.loaded_file_mgmt import LoadedFilesCollection
+from specview.loaded_file_mgmt import LoadedFilesCollection, CacheManager
 
 
 def generate_test_sigmffile(tmpdir) -> Path:
@@ -34,7 +34,8 @@ def generate_test_sigmffile(tmpdir) -> Path:
 def test_get_start_time_sec(tmpdir):
     """Test getting start time in seconds."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -57,7 +58,8 @@ def test_get_start_time_sec(tmpdir):
 def test_set_start_time_sec(tmpdir):
     """Test setting start time in seconds."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -77,7 +79,8 @@ def test_set_start_time_sec(tmpdir):
 def test_get_end_time_sec(tmpdir):
     """Test getting end time in seconds."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -99,7 +102,8 @@ def test_get_end_time_sec(tmpdir):
 def test_set_end_time_sec(tmpdir):
     """Test setting end time in seconds."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -120,7 +124,8 @@ def test_set_end_time_sec(tmpdir):
 def test_set_end_time_sec_before_start_raises_error(tmpdir):
     """Test that setting end time before start time raises an error."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -137,7 +142,8 @@ def test_set_end_time_sec_before_start_raises_error(tmpdir):
 def test_duration_sec_getter(tmpdir):
     """Test getting duration in seconds."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -150,7 +156,8 @@ def test_duration_sec_getter(tmpdir):
 def test_duration_sec_setter(tmpdir):
     """Test setting duration in seconds."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -167,7 +174,8 @@ def test_duration_sec_setter(tmpdir):
 def test_duration_sec_setter_invalid_value(tmpdir):
     """Test that setting invalid duration raises an error."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -181,7 +189,8 @@ def test_duration_sec_setter_invalid_value(tmpdir):
 def test_center_frequency_Hz_getter(tmpdir):
     """Test getting center frequency in Hz."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -194,7 +203,8 @@ def test_center_frequency_Hz_getter(tmpdir):
 def test_center_frequency_Hz_setter(tmpdir):
     """Test setting center frequency in Hz."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -213,7 +223,8 @@ def test_center_frequency_Hz_setter(tmpdir):
 def test_bandwidth_Hz_getter(tmpdir):
     """Test getting bandwidth in Hz."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -226,7 +237,8 @@ def test_bandwidth_Hz_getter(tmpdir):
 def test_bandwidth_Hz_setter(tmpdir):
     """Test setting bandwidth in Hz."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -245,7 +257,8 @@ def test_bandwidth_Hz_setter(tmpdir):
 def test_bandwidth_Hz_setter_invalid_value(tmpdir):
     """Test that setting negative bandwidth raises an error."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -259,7 +272,8 @@ def test_bandwidth_Hz_setter_invalid_value(tmpdir):
 def test_bandwidth_Hz_setter_without_center_frequency(tmpdir):
     """Test that setting bandwidth without center frequency raises an error."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -277,7 +291,8 @@ def test_bandwidth_Hz_setter_without_center_frequency(tmpdir):
 def test_center_frequency_Hz_setter_without_bandwidth(tmpdir):
     """Test setting center frequency when bandwidth is not set."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -300,7 +315,8 @@ def test_center_frequency_Hz_setter_without_bandwidth(tmpdir):
 def test_getters_return_none_when_keys_missing(tmpdir):
     """Test that getters return None when required keys are missing."""
     sigmf_path = generate_test_sigmffile(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     annotations = lf.get_annotations_dict()
@@ -325,7 +341,8 @@ def test_notification_triggered_on_setters(tmpdir):
     def callback(annotation_id, action):
         callbacks.append((annotation_id, action))
     
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lfc.set_annotation_changed_callback(callback)
     lf = lfc.load_file(sigmf_path)
     

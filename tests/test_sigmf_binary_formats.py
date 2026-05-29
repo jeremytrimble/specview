@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 from pathlib import Path
 from sigmf import SigMFFile
-from specview.loaded_file_mgmt import LoadedFilesCollection
+from specview.loaded_file_mgmt import LoadedFilesCollection, CacheManager
 from specview.chunkwise_compute import (
     RawTimeDomainComputationSpec,
     FrequencyDomainComputationSpec,
@@ -232,7 +232,8 @@ def test_sigmf_format_generation_and_loading(tmpdir, sigmf_dtype, nfft:FFTLength
     assert data_path.exists(), f"Data file not created for {sigmf_dtype}"
     
     # Load the file using specview's LoadedFilesCollection
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     loaded_file = lfc.load_file(meta_path)
     
     # Verify the file loaded successfully

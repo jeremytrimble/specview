@@ -11,6 +11,7 @@ from .monotonic_axis import MonotonicAxis
 from PyQt6.QtWidgets import QApplication
 
 from .chunkwise_compute import (
+    CacheManager,
     TimeDomainChunkwiseComputedArray,
     TimeDomainComputationSpec,
     RawTimeDomainComputationSpec, 
@@ -74,12 +75,11 @@ class LoadedDictAction(enum.Enum):
 #            app_state: AppState = QApplication.instance().app_state
 #            app_state.annotation_changed.emit(self._open_file_id, annotation_dict, action)
 
-
 class LoadedFilesCollection:
     """
     A class representing a collection of loaded SigMF files, their LoadedCaptureDict, and LoadedAnnotationDict objects.
     """
-    def __init__(self):
+    def __init__(self, cache_manager: CacheManager):
 
         # mapping of all known file IDs to their LoadedFile objects
         #  this mapping is maintained by this LoadedFilesCollection class
@@ -97,6 +97,8 @@ class LoadedFilesCollection:
         self._file_load_or_unload_cb: typing.Callable[[FileID, LoadedFileAction], None]|None = None
 
         self._file_saved_status_changed_cb: typing.Callable[[FileID, bool], None]|None = None
+
+        self._cache_manager = cache_manager
 
     def set_file_saved_status_changed(self, cb: typing.Callable[[FileID, bool], None]) -> None:
         self._file_saved_status_changed_cb = cb
@@ -164,7 +166,7 @@ class LoadedAnnotationDict(dict):
     add_annotation method which returns an instance of this class.
     """
     @classmethod
-    def create_annotation_dict(cls, parent_loadedfile: LoadedFile, annotation_id:AnnotationID, annotation_content:dict) -> LoadedAnnotationDict:
+    def create_annotation_dict(cls, parent_loadedfile: LoadedFile, annotation_id:AnnotationID, annotation_content:dict, visible:bool=True) -> LoadedAnnotationDict:
         rv = cls()
         # TODO: there is probably a more guaranteed-correct way to "wrap" a dictionary 
         rv._underlying_dict = annotation_content
@@ -172,7 +174,7 @@ class LoadedAnnotationDict(dict):
         rv._annotation_id = annotation_id
         rv._deactivated = False
         rv._is_updating = False  # Instance-level flag to prevent recursive updates
-        rv._visible = True  # Annotations are visible by default
+        rv._visible = visible  # Annotations are visible by default
         return rv
 
     @property
@@ -561,6 +563,7 @@ class LoadedFile:
         # Note: file_path is the path to the .sigmf-meta file
         # sigmf_file is the SigMFFile object loaded from that file
         self._parent_loaded_files = parent_loaded_files
+        self._annotation_visibility_threshold: int = 100
 
         # TODO: change this if we decide to support collections or archives
         sigmf_files = resolve_sigmf_filename(file_path)
@@ -601,9 +604,18 @@ class LoadedFile:
             self._capture_idx_to_capture[cap_idx] = lcd
             self._parent_loaded_files._capture_id_to_capture[capture_id] = lcd  # store in the global mapping
 
-        for annotation_dict in self._sigmf_file.get_annotations():
+        annotations = self._sigmf_file.get_annotations()
+        num_annotations = len(annotations)
+
+        if num_annotations > self._annotation_visibility_threshold:
+            log.warning(f"Loaded file {self.file_id} has {num_annotations} annotations.  Disabling visibility for all annotations to avoid UI performance issues.")
+            default_visibility = False
+        else:
+            default_visibility = True
+
+        for annotation_dict in annotations:
             annotation_id = self._get_next_annotation_id()
-            lad = LoadedAnnotationDict.create_annotation_dict(parent_loadedfile=self, annotation_id=annotation_id, annotation_content=annotation_dict)
+            lad = LoadedAnnotationDict.create_annotation_dict(parent_loadedfile=self, annotation_id=annotation_id, annotation_content=annotation_dict, visible=default_visibility)
             self._annotation_id_to_annotation[annotation_id] = lad
             self._parent_loaded_files._annotation_id_to_annotations[annotation_id] = lad  # store in the global mapping
 
@@ -790,6 +802,7 @@ class LoadedFile:
                 sigmf_datatype = self.sigmf_datatype,
                 comp_spec= comp_spec,
                 num_channels=num_channels,
+                cache_manager = self._parent_loaded_files._cache_manager
             )
             self._time_ccas[comp_spec] = cca
 
@@ -814,6 +827,7 @@ class LoadedFile:
                 num_input_channels= num_channels,
                 target_output_channel = selected_channel,
                 sample_rate_Hz= sample_rate_Hz,
+                cache_manager = self._parent_loaded_files._cache_manager
             )
             self._freq_ccas[key] = cca
 
