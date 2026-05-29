@@ -3,7 +3,7 @@ import numpy as np
 from pathlib import Path
 import sigmf
 
-from specview.loaded_file_mgmt import LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, FileID, CaptureID, AnnotationID
+from specview.loaded_file_mgmt import LoadedAnnotationDict, LoadedCaptureDict, LoadedDictAction, LoadedFile, LoadedFileAction, LoadedFilesCollection, CacheManager, FileID, CaptureID, AnnotationID
 
 
 def generate_example_sigmffile(tmpdir) -> Path:
@@ -45,7 +45,8 @@ def test_loaded_files_collection(tmpdir):
     def load_callback(file: LoadedFile, action:LoadedFileAction):
         load_callbacks.append((file, action))
 
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lfc.set_annotation_changed_callback( annotation_changed_callback )
     lfc.set_file_load_or_unload_callback( load_callback )
 
@@ -152,7 +153,8 @@ def test_capture_frequency_defaulting(tmpdir):
     smf.tofile(tmpdir / "test.sigmf-meta")
     
     # Load the file through LoadedFilesCollection
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(Path(tmpdir / "test.sigmf-meta"))
     
     # Verify the file was loaded

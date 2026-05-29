@@ -11,6 +11,7 @@ from .monotonic_axis import MonotonicAxis
 from PyQt6.QtWidgets import QApplication
 
 from .chunkwise_compute import (
+    CacheManager,
     TimeDomainChunkwiseComputedArray,
     TimeDomainComputationSpec,
     RawTimeDomainComputationSpec, 
@@ -74,12 +75,11 @@ class LoadedDictAction(enum.Enum):
 #            app_state: AppState = QApplication.instance().app_state
 #            app_state.annotation_changed.emit(self._open_file_id, annotation_dict, action)
 
-
 class LoadedFilesCollection:
     """
     A class representing a collection of loaded SigMF files, their LoadedCaptureDict, and LoadedAnnotationDict objects.
     """
-    def __init__(self):
+    def __init__(self, cache_manager: CacheManager):
 
         # mapping of all known file IDs to their LoadedFile objects
         #  this mapping is maintained by this LoadedFilesCollection class
@@ -97,6 +97,8 @@ class LoadedFilesCollection:
         self._file_load_or_unload_cb: typing.Callable[[FileID, LoadedFileAction], None]|None = None
 
         self._file_saved_status_changed_cb: typing.Callable[[FileID, bool], None]|None = None
+
+        self._cache_manager = cache_manager
 
     def set_file_saved_status_changed(self, cb: typing.Callable[[FileID, bool], None]) -> None:
         self._file_saved_status_changed_cb = cb
@@ -800,6 +802,7 @@ class LoadedFile:
                 sigmf_datatype = self.sigmf_datatype,
                 comp_spec= comp_spec,
                 num_channels=num_channels,
+                cache_manager = self._parent_loaded_files._cache_manager
             )
             self._time_ccas[comp_spec] = cca
 
@@ -824,6 +827,7 @@ class LoadedFile:
                 num_input_channels= num_channels,
                 target_output_channel = selected_channel,
                 sample_rate_Hz= sample_rate_Hz,
+                cache_manager = self._parent_loaded_files._cache_manager
             )
             self._freq_ccas[key] = cca
 

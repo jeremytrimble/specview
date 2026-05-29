@@ -7,7 +7,7 @@ from pathlib import Path
 from sigmf import SigMFFile
 
 from specview.annotations_table import AnnotationsModel, AnnotationsTable
-from specview.loaded_file_mgmt import LoadedFilesCollection
+from specview.loaded_file_mgmt import LoadedFilesCollection, CacheManager
 from specview.app_state import AppState
 
 
@@ -72,7 +72,8 @@ def generate_test_sigmffile_with_multiple_annotations(tmpdir) -> Path:
 def test_model_user_role_returns_comparable_values(qapp, tmpdir):
     """Test that AnnotationsModel returns comparable values for Qt.UserRole."""
     sigmf_path = generate_test_sigmffile_with_multiple_annotations(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     # Set up app state with the loaded file
@@ -115,7 +116,8 @@ def test_model_user_role_returns_comparable_values(qapp, tmpdir):
 def test_model_display_role_unchanged(qapp, tmpdir):
     """Test that DisplayRole still returns formatted strings."""
     sigmf_path = generate_test_sigmffile_with_multiple_annotations(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     app_state = qapp.app_state
@@ -145,7 +147,8 @@ def test_model_display_role_unchanged(qapp, tmpdir):
 def test_header_click_toggle(qapp, tmpdir):
     """Test that clicking the same header toggles sort order."""
     sigmf_path = generate_test_sigmffile_with_multiple_annotations(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     app_state = qapp.app_state
@@ -184,7 +187,8 @@ def test_header_click_toggle(qapp, tmpdir):
 def test_numeric_sorting_with_missing_values(qapp, tmpdir):
     """Test that numeric columns sort with missing values at the end."""
     sigmf_path = generate_test_sigmffile_with_multiple_annotations(tmpdir)
-    lfc = LoadedFilesCollection()
+    cache_manager = CacheManager(base_path=Path(tmpdir/"cache"))
+    lfc = LoadedFilesCollection(cache_manager=cache_manager)
     lf = lfc.load_file(sigmf_path)
     
     app_state = qapp.app_state
