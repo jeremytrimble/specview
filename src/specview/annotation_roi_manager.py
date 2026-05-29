@@ -21,6 +21,7 @@ class AnnotationROI(Generic[ROIType]):
     """Class to hold an annotation ROI and its metadata"""
     annotation_id: AnnotationID
     roi: ROIType
+    added_to_plot: bool = False
 
 class ROIDimensions(enum.IntEnum):
     TIME = 1
@@ -179,12 +180,14 @@ class AnnotationROIManager(Generic[ROIType]):
                     label_fill_color=ANNOTATION_ROI_COLOR,
                     sideScalers=True,
                 )
-                self._plot_widget.addItem(roi, ignoreBounds=True)
+
+                aroi = AnnotationROI(ad.annotation_id, roi)
+                self._annotation_rois[ad.annotation_id] = aroi
+
                 roi.sigRegionChanged.connect(lambda: self._on_rect_roi_changed(annotation_id))
                 # Connect label click
                 roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
-                aroi = AnnotationROI(ad.annotation_id, roi)
-                self._annotation_rois[ad.annotation_id] = aroi
+
             else:
                 aroi = self._annotation_rois[ad.annotation_id]
                 aroi.roi.setPos(pos=(freq_lo_Hz, time_lo_sec))
@@ -207,17 +210,24 @@ class AnnotationROIManager(Generic[ROIType]):
                     label_text_color=(255, 255, 255),
                     label_fill_color=ANNOTATION_ROI_COLOR,
                 )
-                self._plot_widget.addItem(roi, ignoreBounds=True)
+                aroi = AnnotationROI(ad.annotation_id, roi)
+                self._annotation_rois[ad.annotation_id] = aroi
+
                 roi.sigRegionChanged.connect(lambda: self._on_linear_roi_changed(annotation_id))
                 # Connect label click
                 roi.label_clicked.connect(lambda aid=annotation_id: self._on_label_clicked(aid))
-                aroi = AnnotationROI(ad.annotation_id, roi)
-                self._annotation_rois[ad.annotation_id] = aroi
+
             else:
                 aroi = self._annotation_rois[ad.annotation_id]
                 aroi.roi.setRegion(region)
 
-        aroi.roi.setVisible(ad.visible)
+        if ad.visible and not aroi.added_to_plot:
+            self._plot_widget.addItem(aroi.roi, ignoreBounds=True)
+            aroi.added_to_plot = True
+        elif not ad.visible and aroi.added_to_plot:
+            self._plot_widget.removeItem(aroi.roi)
+            aroi.added_to_plot = False
+        #aroi.roi.setVisible(ad.visible)
         aroi.roi.setLabel(ad.label)
 
     def on_annotation_changed(self, annotation_id: AnnotationID, action: LoadedDictAction):
