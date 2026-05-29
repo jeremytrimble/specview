@@ -28,6 +28,7 @@ dev = [
     "specview",
     "pytest-qt>=4.5.0",
     "poethepoet>=0.31.1",
+    "pillow>=11.0.0",
     "ruff>=0.8.4",
 ]
 
@@ -53,6 +54,9 @@ build-backend = "setuptools.build_meta"
 specview = "src/specview"
 pyqtschema = "subs/pyqtschema/src/pyqtschema"
 
+[tool.setuptools.package-data]
+specview = ["assets/*"]
+
 # TODO: make the build backend generate the version info for a wheel file
 
 [tool.poe.tasks]
@@ -61,5 +65,6 @@ build-wheel = "uv build"
 build-pyinstaller = "pyinstaller --clean specview.spec"
 build = ["build-wheel", "build-pyinstaller"]
 clean.script = "poethepoet.scripts:rm('dist/', 'build/')"
+make-icons = "python scripts/make_app_icon.py --input specview_lg.png --assets-dir src/specview/assets --name specview"
 format = "ruff format ."
 format-check = "ruff format --check ."

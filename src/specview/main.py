@@ -1,4 +1,5 @@
 from PyQt6.QtCore import QSize, Qt, QThread, pyqtSignal, QObject, QTimer, QThreadPool, QSettings
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMainWindow, QGridLayout, QWidget, QSlider, QLabel, QHBoxLayout, QVBoxLayout, QPushButton, QComboBox, QDockWidget
 import pyqtgraph as pg # tested with pyqtgraph==0.13.7
 import numpy as np
@@ -265,6 +266,24 @@ def parse_args():
 
     return parser.parse_args()
 
+
+def _find_app_icon_path() -> Path | None:
+    if hasattr(sys, "_MEIPASS"):
+        base_dir = Path(getattr(sys, "_MEIPASS"))
+    else:
+        base_dir = Path(__file__).resolve().parent
+
+    icon_candidates = [
+        base_dir / "assets" / "specview.png",
+        base_dir / "assets" / "specview.ico",
+        base_dir / "assets" / "specview.icns",
+    ]
+    for icon_path in icon_candidates:
+        if icon_path.exists():
+            log.debug(f"Found app icon at {icon_path}")
+            return icon_path
+    return None
+
 def main():
     args = parse_args()
 
@@ -275,6 +294,15 @@ def main():
     log.debug(f"Command line arguments: {args}")
 
     app = QApplication([])
+    app.setApplicationName("Specview")
+    app.setApplicationVersion(get_version_info().version)
+
+    app_icon_path = _find_app_icon_path()
+    if app_icon_path is not None:
+        app.setWindowIcon(QIcon(str(app_icon_path)))
+    else:
+        log.info("No app icon found under assets/, continuing without custom icon")
+
     app_state = app.app_state = AppState(parent=app)
     app.thread_pool = QThreadPool()
     app.thread_pool.setMaxThreadCount(4) # TODO: make configurable?

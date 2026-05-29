@@ -6,10 +6,21 @@ sigmf_module = pkgutil.resolve_name( 'sigmf' )
 sigmf_module_dir = Path(sigmf_module.__file__).parent
 #print(f"{sigmf_module_dir=}")
 
+assets_dir = sigmf_module_dir / 'src' / 'specview' / 'assets'
+
 sigmf_data_files = [ 
     ( str(sigmf_module_dir/'schema-collection.json'), 'sigmf' ),
     ( str(sigmf_module_dir/'schema-meta.json'), 'sigmf' ),
 ]
+if assets_dir.exists():
+    sigmf_data_files.append((str(assets_dir), 'assets'))
+
+icon_candidates = [
+    assets_dir / 'specview.png',
+    assets_dir / 'specview.ico',
+    assets_dir / 'specview.icns',
+]
+exe_icon = next((str(path) for path in icon_candidates if path.exists()), None)
 
 a = Analysis(
     ['outer_main.py'],
@@ -48,4 +59,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=exe_icon,
 )
