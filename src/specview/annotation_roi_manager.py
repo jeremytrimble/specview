@@ -207,7 +207,7 @@ class AnnotationROIManager(Generic[ROIType]):
                 self._annotation_rois[ad.annotation_id] = aroi
             else:
                 aroi = self._annotation_rois[ad.annotation_id]
-                aroi.pos_and_size_or_region = (pos, size)
+            aroi.pos_and_size_or_region = (pos, size)
 
         else: # TIME or FREQUENCY
             # Handle linear ROI (Time or Spectrum view)
@@ -223,10 +223,9 @@ class AnnotationROIManager(Generic[ROIType]):
             if ad.annotation_id not in self._annotation_rois:
                 aroi = AnnotationROI(ad.annotation_id)
                 self._annotation_rois[ad.annotation_id] = aroi
-
             else:
                 aroi = self._annotation_rois[ad.annotation_id]
-                aroi.pos_and_size_or_region = region
+            aroi.pos_and_size_or_region = region
 
         if ad.visible: 
             if not aroi.added_to_plot:
