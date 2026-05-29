@@ -25,7 +25,7 @@ class AnnotationsModel(QAbstractTableModel):
             "Label",
             "Start Time",
             "End Time",
-            "Duration (sec)",
+            "Duration",
             "Low Freq",
             "Center Freq",
             "High Freq",
