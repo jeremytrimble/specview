@@ -1,11 +1,12 @@
 from __future__ import annotations
+import enum
 import numpy as np
 import numpy.typing as npt
 import typing
 from pathlib import Path 
 from platformdirs import user_cache_dir
 from hashlib import sha256
-from enum import Enum, IntEnum
+from enum import Enum, StrEnum
 import abc
 from dataclasses import dataclass
 from multiprocessing import cpu_count
@@ -24,8 +25,6 @@ log = logging.getLogger("chunkwise_compute")
 import threading
 from PyQt6.QtWidgets import QApplication
 from .sigmf_util import SigmfDataType
-
-chunkwise_computations_cache_dir = Path(user_cache_dir("sigvu", "jeremytrimble", ensure_exists=True)) / "ccache"
 
 RangeComputedCallback = typing.Callable[["ChunkwiseComputedArray", int, int, np.ndarray], None]
 
@@ -220,13 +219,13 @@ class CacheManager:
         h.update( hash_input.encode('utf-8') )
         return f"{prefix}_{h.hexdigest()}"
 
-class TimeDomainComputationType(IntEnum):
-    RAW = 0
-    MAGNITUDE_DB = 1
-    REAL = 2
-    IMAG = 3
-    FM_DEMOD = 4
-    #AM_DEMOD = 5
+class TimeDomainComputationType(enum.StrEnum):
+    RAW = enum.auto()
+    MAGNITUDE_DB = enum.auto()
+    REAL = enum.auto()
+    IMAG = enum.auto()
+    FM_DEMOD = enum.auto()
+    #AM_DEMOD = enum.auto()
 
 @dataclass(frozen=True)
 class TimeDomainComputationSpec(abc.ABC):
@@ -264,7 +263,7 @@ class ProcessingPoolManager:
 
     def __init__(self):
         self._pool: Pool | None = None
-        self._num_processes = max(1, cpu_count() - 2)  # Leave some CPUs free
+        self._num_processes = max(1, cpu_count() // 2)  # Leave some CPUs free
 
     @classmethod
     def get_instance(cls) -> ProcessingPoolManager:
@@ -415,7 +414,7 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         # Note: this is only needed if we have nontrivial computation to do in this class
         cache_tag_tuples = cache_manager.get_cache_tag_tuples_for_file(signal_file) + comp_spec.get_cache_tag_tuples()
-        self._state_dir = cache_manager.get_cache_path_from_tag( cache_manager.get_cache_tag_from_tuples( prefix=self._signal_file.resolve().name, tuples=cache_tag_tuples ) )
+        self._state_dir = cache_manager.get_cache_path_from_tag( cache_manager.get_cache_tag_from_tuples( prefix=self._signal_file.resolve().name+"_"+comp_spec.computation_type, tuples=cache_tag_tuples ) )
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
@@ -593,14 +592,14 @@ class TimeDomainChunkwiseComputedArray(ChunkwiseComputedArray):
             output_data.astype(output_dtype).tofile(f)
 
 
-class WindowType(str, Enum):
+class WindowType(enum.StrEnum):
     HAMMING = "hamming"
     HANN = "hann"
     BLACKMAN = "blackman"
     RECTANGULAR = "rectangular"
     # TODO: add other windows?
 
-class FFTLength(int, Enum):
+class FFTLength(enum.IntEnum):
     N128 = 128
     N256 = 256
     N512 = 512
@@ -903,7 +902,7 @@ class FrequencyDomainChunkwiseComputedArray(ChunkwiseComputedArray):
 
         # Note: this is only needed if we have nontrivial computation to do in this class
         cache_tag_tuples = cache_manager.get_cache_tag_tuples_for_file(signal_file) + comp_spec.get_cache_tag_tuples() + [("target_output_channel", str(target_output_channel)) ]
-        self._state_dir = cache_manager.get_cache_path_from_tag( cache_manager.get_cache_tag_from_tuples( prefix=self._signal_file.resolve().name, tuples=cache_tag_tuples ) )
+        self._state_dir = cache_manager.get_cache_path_from_tag( cache_manager.get_cache_tag_from_tuples( prefix=self._signal_file.resolve().name+"_SGRAM", tuples=cache_tag_tuples ) )
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
         self._chunk_bitmap_path = self._state_dir / f"bitmap"
