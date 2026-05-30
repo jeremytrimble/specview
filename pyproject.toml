@@ -1,7 +1,7 @@
 [project]
 name = "specview"
 version = "0.2.0"
-description = "GUI viewer for SigMF RF signal recordings with spectrum, waterfall, and time-domain displays"
+description = "SigMF File Viewer and Annotation Editor"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
