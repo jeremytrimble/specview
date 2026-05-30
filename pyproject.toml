@@ -1,6 +1,6 @@
 [project]
 name = "specview"
-version = "0.2.0"
+version = "0.3.0"
 description = "SigMF File Viewer and Annotation Editor"
 readme = "README.md"
 license = { file = "LICENSE" }
