@@ -672,7 +672,7 @@ class LoadedFile:
 
     def save(self):
         self._sort_annotations_in_sigmf_file()
-        self._sigmf_file.tofile(self.sigmf_meta_file_path)
+        self._sigmf_file.tofile(self.sigmf_meta_file_path, overwrite=True)
         self._set_state_to_saved()
 
     # TODO: support save-as?
