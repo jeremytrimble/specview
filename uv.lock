@@ -123,6 +123,15 @@ toml = [
 ]
 
 [[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -861,20 +870,21 @@ wheels = [
 
 [[package]]
 name = "sigmf"
-version = "1.2.10"
+version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "defusedxml" },
     { name = "jsonschema" },
     { name = "numpy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/78/07063dcd70900a852cb6a981b186c794c03faf9a2201bdea4c86aef65ccf/sigmf-1.2.10.tar.gz", hash = "sha256:0301a312abb9d34e090798a67886ea0aa2bf796242d856e49c8707fd3d3c9255", size = 47177, upload-time = "2025-06-04T14:56:47.86Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5c/c2/ce3c06ac1040b48f1cf722feaa36f312599160e63ad4a7540319205322ec/sigmf-1.11.0.tar.gz", hash = "sha256:dda43bee94e52f5df97edfa139e48a3d884db1c4e80c96555cebcaeff6e05e2f", size = 92146, upload-time = "2026-05-29T23:19:09.642Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/83/06c70ea9c9326a4ab7ddf9a45f22317a3e99488720efdbdcd9dfef7bab51/sigmf-1.2.10-py3-none-any.whl", hash = "sha256:a9a7f7d0d48c350a78fc48ab14baa0fb7fa2441855467f3593d4c591d2018c11", size = 35749, upload-time = "2025-06-04T14:56:46.9Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/aa/ba82bcea2182123f298754902627a270edecd3f9acb919025b602d8725b7/sigmf-1.11.0-py3-none-any.whl", hash = "sha256:5d920c5a6fbc7b14d30fd2eb1dedeadf1cc4d795e5c2b05793d571c37015298a", size = 66638, upload-time = "2026-05-29T23:19:06.119Z" },
 ]
 
 [[package]]
 name = "specview"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
@@ -913,7 +923,7 @@ requires-dist = [
     { name = "pyqtgraph", specifier = ">=0.13.7" },
     { name = "qtpy", specifier = ">=2.4.3" },
     { name = "scipy", specifier = ">=1.16.0" },
-    { name = "sigmf", specifier = ">=1.2.10" },
+    { name = "sigmf", specifier = ">=1.11.0,<1.12.0" },
 ]
 
 [package.metadata.requires-dev]
