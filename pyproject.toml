@@ -33,7 +33,7 @@ dependencies = [
     "pyqt6>=6.7.0",
     "pyqtgraph>=0.13.7",
     "qtpy>=2.4.3",
-    "scipy>=1.16.0",
+    "scipy>=1.17.0",
     "sigmf>=1.11.0,<1.12.0",
 ]
 
