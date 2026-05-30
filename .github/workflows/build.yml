@@ -53,6 +53,11 @@ jobs:
             binary_src: dist/specview.exe
             binary_dst_suffix: windows
             binary_ext: ".exe"
+          - os: windows-11-arm
+            platform: windows-arm64
+            binary_src: dist/specview.exe
+            binary_dst_suffix: windows-arm64
+            binary_ext: ".exe"
 
     steps:
       - name: Checkout code
