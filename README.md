@@ -4,11 +4,14 @@ The [SigMF](https://sigmf.org/) ("Signal Metadata Format") is a standard format 
 
 `specview` is a portable and performant SigMF file viewer and annotation editor.
 
+![screenshot](doc/screenshot.png)
+
 ## Features
 
 - Simultaneous **time-domain, spectrum, and waterfall (spectrogram) views** with linked brushing (simultaneously select time and frequency regions).
 - Support for viewing **large files** (10s of GB) and multiple files -- computation is parallelized in the background.
 - Precise annotation of time/frequency regions using cursor selection and/or entering parameters into the table.  Arbitrary JSON editing.
+- Dockable/Floatable window panes for easy wideband viewing on larger screens.
 - Configurable spectrogram/FFT parameters (#bins, window, hop).
 
 ## Installation
@@ -19,7 +22,7 @@ The [SigMF](https://sigmf.org/) ("Signal Metadata Format") is a standard format 
 - Available for Linux, Mac, and Windows.
 
 ### From PyPI
-Install the `specview` package from PyPI using your favorite Python package/tool manager (run one of the following commands):
+Install the `specview` package from PyPI using your favorite Python package/tool manager (run any one of the following commands):
 - `pip install --user specview`
 - `pipx install specview`
 - `uv tool install specview`
