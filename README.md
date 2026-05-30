@@ -1,39 +1,31 @@
+# specview: A SigMF File Viewer and Annotation Editor
 
-# specview
+The [SigMF](https://sigmf.org/) ("Signal Metadata Format") is a standard format for exchanging digitally-sampled time-series data with JSON-based metadata.  It is often used for storing real or complex-valued (IQ) time series data in digital signal processing or software-defined radio applications.
 
-A desktop GUI application for viewing and annotating [SigMF](https://github.com/sigmf/SigMF) RF signal recordings.
+`specview` is a portable and performant SigMF file viewer and annotation editor.
 
 ## Features
 
-- **Spectrum analyzer** — FFT-based frequency-domain display with configurable window and averaging
-- **Waterfall display** — scrolling time-frequency spectrogram
-- **Time-domain view** — raw I/Q sample display
-- **Annotation support** — view, edit, and create SigMF annotations interactively
-- **Multi-file support** — open and browse multiple recordings at once
-- **Captures panel** — navigate between captures within a file
+- Simultaneous **time-domain, spectrum, and waterfall (spectrogram) views** with linked brushing (simultaneously select time and frequency regions).
+- Support for viewing **large files** (10s of GB) and multiple files -- computation is parallelized in the background.
+- Precise annotation of time/frequency regions using cursor selection and/or entering parameters into the table.  Arbitrary JSON editing.
+- Configurable spectrogram/FFT parameters (#bins, window, hop).
 
 ## Installation
 
-### Pre-built binary (Linux)
-
-Download the latest release from the [Releases page](https://github.com/jeremytrimble/specview/releases) and run the `specview` executable directly — no Python required.
+### Pre-built single-file exectuable
+- Download the latest release from the [Releases page](https://github.com/jeremytrimble/specview/releases) and run the `specview` executable directly.
+- No Python required.
+- Available for Linux, Mac, and Windows.
 
 ### From PyPI
-
-```
-pip install specview
-```
+Install the `specview` package from PyPI using your favorite Python package/tool manager (run one of the following commands):
+- `pip install --user specview`
+- `pipx install specview`
+- `uv tool install specview`
+- `pixi global install --pypi specview`
 
 Requires Python 3.11+ and a working Qt6 environment.
-
-### From source
-
-```
-git clone https://github.com/jeremytrimble/specview.git
-cd specview
-uv sync
-uv run specview
-```
 
 ## Usage
 
@@ -41,17 +33,20 @@ uv run specview
 specview [file1.sigmf-meta [file2.sigmf-meta ...]]
 ```
 
-Files can also be opened from the **File** menu after launch.
+Files can also be opened from the **File** menu after launch.  See also `specview --help`.
+
+
+## Development
+
+To run unit tests:
 
 ```
-specview --help
+git clone https://github.com/jeremytrimble/specview.git
+cd specview
+uv run --group build --group dev poe test
 ```
-
-## Building
-
-See [RELEASING.md](RELEASING.md) for instructions on building wheel and PyInstaller binary releases.
 
 ## License
+Specview is built on top of numerous open-source projects and proudly released under the GNU General Public License v3.
 
-MIT — see [LICENSE](LICENSE).
-
+Built with open-source, copilot, and love.
